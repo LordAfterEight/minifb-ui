@@ -1,0 +1,190 @@
+//! This is a higher-level crate for rendering to a window using minifb as the backend.
+
+/// Owns the window and the raw flat framebuffer to be rendered.
+pub struct Window {
+    pub window: minifb::Window,
+    pub width: usize,
+    pub height: usize,
+    pub framebuffer_raw: Vec<u32>,
+    pub is_fullscreen: bool,
+}
+
+impl Window {
+    /// Creates a non-resizable window with a resolution of 1280 by 720 pixels
+    pub fn default() -> Self {
+        Self {
+            window: minifb::Window::new(
+                "minifb-ui",
+                1280,
+                720,
+                minifb::WindowOptions {
+                    resize: false,
+                    scale: minifb::Scale::X1,
+                    scale_mode: minifb::ScaleMode::AspectRatioStretch,
+                    ..Default::default()
+                },
+            )
+            .unwrap(),
+            width: 1280,
+            height: 720,
+            framebuffer_raw: vec![0u32; 1280 * 720],
+            is_fullscreen: false,
+        }
+    }
+
+    /// Creates a window with custom resolution, can be borderless and resizable
+    pub fn custom(name: &str, width: usize, height: usize, borders: bool, resizable: bool) -> Self {
+        Self {
+            window: minifb::Window::new(
+                name,
+                width,
+                height,
+                minifb::WindowOptions {
+                    resize: resizable,
+                    scale: minifb::Scale::X1,
+                    scale_mode: minifb::ScaleMode::Center,
+                    borderless:borders,
+                    ..Default::default()
+                },
+            )
+            .unwrap(),
+            width: width,
+            height: height,
+            framebuffer_raw: vec![0u32; width * height],
+            is_fullscreen: false,
+        }
+    }
+
+    /// Draws a single pixel at given coordinates with color
+    pub fn draw_pixel(&mut self, x: usize, y: usize, color: crate::color::Color) {
+        self.framebuffer_raw[y * self.width + x] = color.to_u32()
+    }
+
+    /// Draws a straight line from coordinate to coordinate with color
+    pub fn draw_line(
+        &mut self,
+        x0: isize,
+        y0: isize,
+        x1: isize,
+        y1: isize,
+        th: usize,
+        color: crate::color::Color,
+    ) {
+        let dx = (x1 - x0).abs();
+        let dy = (y1 - y0).abs();
+        let sx = if x0 < x1 { 1isize } else { -1 };
+        let sy = if y0 < y1 { 1isize } else { -1 };
+        let value = color.as_u32();
+        let half = (th / 2) as isize;
+
+        let mut x = x0;
+        let mut y = y0;
+        let mut err = dx - dy;
+
+        loop {
+            for oy in -half..half {
+                for ox in -half..half {
+                    let px = x + ox;
+                    let py = y + oy;
+                    if px >= 0 && px < self.width as isize && py >= 0 && py < self.height as isize {
+                        self.framebuffer_raw[py as usize * self.width + px as usize] = value;
+                    }
+                }
+            }
+
+            if x == x1 && y == y1 { break; }
+
+            let e2 = err * 2;
+            if e2 > -dy { err -= dy; x += sx; }
+            if e2 <  dx { err += dx; y += sy; }
+        }
+    }
+
+    /// Draws a filled rectangle at given coordinates with size and color
+    pub fn draw_rect_f(&mut self, x: usize, y: usize, w: usize, h: usize, color: crate::color::Color) {
+        let value = color.as_u32();
+        let start = y * self.width + x;
+        for dy in 0..h {
+            let row = &mut self.framebuffer_raw[start + dy * self.width..][..w];
+            row.fill(value);
+        }
+    }
+
+    /// Draws a hollow rectangle at given coordinates with size and color
+    pub fn draw_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: crate::color::Color) {
+        let value = color.as_u32();
+        if h >= 1 {
+            let top = y * self.width + x;
+            self.framebuffer_raw[top..top + w].fill(value);
+        }
+        if h >= 2 {
+            let bottom = (y + h - 1) * self.width + x;
+            self.framebuffer_raw[bottom..bottom + w].fill(value);
+        }
+        if w >= 2 && h >= 2 {
+            let left_start = (y + 1) * self.width + x;
+            let right_start = (y + 1) * self.width + x + w - 1;
+
+            for dy in 0..(h - 2) {
+                let offset = dy * self.width;
+                self.framebuffer_raw[left_start + offset] = value;
+                self.framebuffer_raw[right_start + offset] = value;
+            }
+        }
+    }
+
+    /// Draws text using the passed font
+    pub fn draw_text(&mut self, x: usize, y: usize, text: &crate::ui::Text, scale: f32, color: crate::color::Color) {
+        let fg_r = color.r as u32;
+        let fg_g = color.g as u32;
+        let fg_b = color.b as u32;
+
+        let mut cursor_x = x as i32;
+
+        for ch in text.text.chars() {
+            let (metrics, bitmap) = text.font.font.rasterize(ch, scale);
+
+            let glyph_x = cursor_x;
+            let glyph_y = y as i32 - metrics.height as i32 - metrics.ymin;
+
+            for row in 0..metrics.height {
+                for col in 0..metrics.width {
+                    let px = glyph_x + col as i32;
+                    let py = glyph_y + row as i32;
+
+                    if px < 0 || py < 0 { continue; }
+                    let (px, py) = (px as usize, py as usize);
+                    if px >= self.width || py >= self.height { continue; }
+
+                    let alpha = bitmap[row * metrics.width + col] as u32;
+                    if alpha == 0 { continue; }
+
+                    let idx = py * self.width + px;
+                    let bg = self.framebuffer_raw[idx];
+                    let bg_r = (bg >> 16) & 0xFF;
+                    let bg_g = (bg >> 8)  & 0xFF;
+                    let bg_b =  bg        & 0xFF;
+
+                    let r = (fg_r * alpha + bg_r * (255 - alpha)) / 255;
+                    let g = (fg_g * alpha + bg_g * (255 - alpha)) / 255;
+                    let b = (fg_b * alpha + bg_b * (255 - alpha)) / 255;
+
+                    self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
+                }
+            }
+
+            cursor_x += metrics.advance_width as i32;
+        }
+    }
+
+    /// Toggles fullscreen on/off
+    pub fn toggle_fullscreen(&mut self) {
+    }
+
+    /// Updates the window. Should be called in a loop until the window is to be closed
+    pub fn update(&mut self) {
+        self.window
+            .update_with_buffer(self.framebuffer_raw.as_slice(), self.width, self.height)
+            .unwrap();
+    }
+}
