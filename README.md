@@ -35,7 +35,6 @@ fn main() {
         .hover_bg(minifb_ui::color::Color::from(0x333333));
 
     while window.window.is_open() {
-        window.clear(&minifb_ui::color::Color::from(0x0));
         window.draw_text(
             10,
             10,
@@ -48,9 +47,13 @@ fn main() {
     }
 }
 ```
-Idle:
-<img src="example/example1_idle.png">
-Hovered:
-<img src="example/example1_hovered.png">
-Clicked:
-<img src="example/example1_clicked.png">
+### This is what this button looks like when idle, hovered and clicked!
+<p align="center">
+    <img align=center src="example/example1_idle.png">
+</p>
+<p align="center">
+    <img align=center src="example/example1_hovered.png">
+</p>
+<p align="center">
+    <img align=center src="example/example1_clicked.png">
+</p>
