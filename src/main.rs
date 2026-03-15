@@ -13,7 +13,7 @@ fn main() {
     let text = minifb_ui::ui::text::Text::new("The quick brown fox jumps over the lazy dog  !\"§$%&/()=?+~*#'-_.:,;<>|", font.clone());
 
     let button = minifb_ui::ui::button::Button::default()
-        .label("Press Me UwU", font)
+        .label("Press Me!", font)
         .text_color(minifb_ui::color::Color::from(0xAAAAAA))
         .label_alignment(minifb_ui::ui::button::Alignment::Center)
         .position(100, 100)
