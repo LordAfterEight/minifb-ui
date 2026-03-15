@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "minifb-ui"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "fontdue",
  "minifb",
