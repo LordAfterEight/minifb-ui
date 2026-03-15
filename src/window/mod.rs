@@ -202,4 +202,23 @@ impl Window {
             .update_with_buffer(self.framebuffer_raw.as_slice(), self.width, self.height)
             .unwrap();
     }
+
+    pub fn get_mouse_state(&self) -> MouseState {
+        let pos = self.window.get_mouse_pos(minifb::MouseMode::Clamp).unwrap();
+        let lmb = self.window.get_mouse_down(minifb::MouseButton::Left);
+        let rmb = self.window.get_mouse_down(minifb::MouseButton::Right);
+        MouseState {
+            pos_x: pos.0,
+            pos_y: pos.1,
+            rmb_clicked: rmb,
+            lmb_clicked: lmb,
+        }
+    }
+}
+
+pub struct MouseState {
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub rmb_clicked: bool,
+    pub lmb_clicked: bool
 }

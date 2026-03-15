@@ -148,10 +148,25 @@ impl Button {
     }
 
     /// Sets the button's background color for idle, hovered and clicked state
-    pub fn bg_color(mut self, color: crate::color::Color) -> Self {
+    pub fn background(mut self, color: crate::color::Color) -> Self {
         self.bg_hovered_col = color.clone();
         self.bg_clicked_col = color.clone();
         self.bg_col = color;
+        self
+    }
+
+    pub fn idle_bg(mut self, color: crate::color::Color) -> Self {
+        self.bg_col = color;
+        self
+    }
+
+    pub fn hover_bg(mut self, color: crate::color::Color) -> Self {
+        self.bg_hovered_col = color;
+        self
+    }
+
+    pub fn click_bg(mut self, color: crate::color::Color) -> Self {
+        self.bg_clicked_col = color;
         self
     }
 
@@ -197,12 +212,28 @@ impl Button {
 
     /// Internal helper
     fn draw_button(&self, window: &mut crate::window::Window) {
+        let border_col = match self.is_hovered {
+            false => &self.border_col,
+            true => match self.is_clicked {
+                false => &self.border_hovered_col,
+                true => &self.border_clicked_col
+            }
+        };
+
+        let bg_col = match self.is_hovered {
+            false => &self.bg_col,
+            true => match self.is_clicked {
+                false => &self.bg_hovered_col,
+                true => &self.bg_clicked_col
+            }
+        };
+
         window.draw_rect_f(
             self.pos_x,
             self.pos_y,
             self.width,
             self.height,
-            &self.bg_col,
+            bg_col,
         );
 
         for i in 0..self.border_size {
@@ -211,7 +242,7 @@ impl Button {
                 self.pos_y + i,
                 self.width - i * 2,
                 self.height - i * 2,
-                &self.border_col,
+                border_col,
             );
         }
 
@@ -278,17 +309,49 @@ impl Button {
         }
     }
 
-    /// Draws the button to a window
-    pub fn draw(&mut self, window: &mut crate::window::Window) {
-        self.draw_button(window);
-        self.draw_shadow(window);
+    pub fn is_hovered(&mut self, window: &crate::window::Window) -> bool {
+        let state = window.get_mouse_state();
+        if (state.pos_x as usize) > self.pos_x
+            && (state.pos_y as usize) > self.pos_y
+            && (state.pos_x as usize) < self.pos_x + self.width
+            && (state.pos_y as usize) < self.pos_y + self.height
+        {
+            self.is_hovered = true;
+            true
+        } else {
+            self.is_hovered = false;
+            false
+        }
     }
 
-    pub fn is_hovered(&mut self) -> bool {
-        false
+    pub fn is_clicked(&mut self, window: &crate::window::Window) -> bool {
+        let state = window.get_mouse_state();
+        if self.is_hovered(window) && state.lmb_clicked {
+            true
+        } else {
+            false
+        }
     }
-    pub fn is_clicked(&mut self) -> bool {
-        false
+
+    /// Draws the button to a window
+    pub fn draw(&mut self, window: &mut crate::window::Window) {
+        let state = window.get_mouse_state();
+        if (state.pos_x as usize) > self.pos_x
+            && (state.pos_y as usize) > self.pos_y
+            && (state.pos_x as usize) < self.pos_x + self.width
+            && (state.pos_y as usize) < self.pos_y + self.height
+        {
+            self.is_hovered = true;
+            if state.lmb_clicked {
+                self.is_clicked = true;
+            } else {
+                self.is_clicked = false;
+            }
+        } else {
+            self.is_hovered = false;
+        }
+        self.draw_button(window);
+        self.draw_shadow(window);
     }
 }
 
