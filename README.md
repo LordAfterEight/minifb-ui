@@ -3,6 +3,7 @@ This is a crate aiming to make usage of the minifb crate easier than it already 
 
 ![docs.rs](https://img.shields.io/docsrs/minifb-ui)
 ![Crates.io Version](https://img.shields.io/crates/v/minifb-ui)
+![GitHub License](https://img.shields.io/github/license/lordaftereight/minifb-ui)
 
 
 # Example Usage
