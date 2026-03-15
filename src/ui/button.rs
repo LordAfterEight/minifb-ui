@@ -58,8 +58,8 @@ pub struct Button {
     /// Whether the Button is a push button or a toggle button
     pub button_type: ButtonType,
 
-    is_hovered: bool,
-    is_clicked: bool,
+    /// The current state of the Button. Can be Idle, Hovered or Clicked
+    pub state: ButtonState,
 }
 
 impl Button {
@@ -139,6 +139,24 @@ impl Button {
         self
     }
 
+    /// Specifically sets the lable color for when the Button is idle
+    pub fn idle_label_col(mut self, color: crate::color::Color) -> Self {
+        self.label_col = color;
+        self
+    }
+
+    /// Specifically sets the lable color for when the Button is hovered
+    pub fn hover_label_col(mut self, color: crate::color::Color) -> Self {
+        self.label_hovered_col = color;
+        self
+    }
+
+    /// Specifically sets the lable color for when the Button is clicked
+    pub fn click_label_col(mut self, color: crate::color::Color) -> Self {
+        self.label_clicked_col = color;
+        self
+    }
+
     /// Sets the border color for idle, hovered and clicked state
     pub fn border_color(mut self, color: crate::color::Color) -> Self {
         self.border_hovered_col = color.clone();
@@ -155,16 +173,19 @@ impl Button {
         self
     }
 
+    /// Specifically sets the background color for when the Butoon is idle
     pub fn idle_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_col = color;
         self
     }
 
+    /// Specifically sets the background color for when the Butoon is hovered
     pub fn hover_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_hovered_col = color;
         self
     }
 
+    /// Specifically sets the background color for when the Butoon is clicked
     pub fn click_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_clicked_col = color;
         self
@@ -178,13 +199,13 @@ impl Button {
 
     fn draw_shadow(&self, window: &mut crate::window::Window) {
         let shadow_depth = self.shadow_intensity as i32;
-        let shadow_size = match self.is_hovered {
-            true => match self.is_clicked {
-                true => self.shadow_size_clicked,
-                false => self.shadow_size_hovered,
-            },
-            false => self.shadow_size,
-        };
+        let shadow_size;
+
+        match self.state {
+            ButtonState::Idle => shadow_size = self.shadow_size,
+            ButtonState::Hovered => shadow_size = self.shadow_size_hovered,
+            ButtonState::Clicked => shadow_size = self.shadow_size_clicked
+        }
 
         for i in 0..shadow_size {
             let t_num = i as i32;
@@ -212,21 +233,27 @@ impl Button {
 
     /// Internal helper
     fn draw_button(&self, window: &mut crate::window::Window) {
-        let border_col = match self.is_hovered {
-            false => &self.border_col,
-            true => match self.is_clicked {
-                false => &self.border_hovered_col,
-                true => &self.border_clicked_col
-            }
-        };
+        let bg_col: &crate::color::Color;
+        let border_col: &crate::color::Color;
+        let label_col: &crate::color::Color;
 
-        let bg_col = match self.is_hovered {
-            false => &self.bg_col,
-            true => match self.is_clicked {
-                false => &self.bg_hovered_col,
-                true => &self.bg_clicked_col
+        match self.state {
+            ButtonState::Idle => {
+                bg_col = &self.bg_col;
+                border_col = &self.border_col;
+                label_col = &self.label_col;
             }
-        };
+            ButtonState::Hovered =>{
+                bg_col = &self.bg_hovered_col;
+                border_col = &self.border_hovered_col;
+                label_col = &self.label_hovered_col;
+            },
+            ButtonState::Clicked => {
+                bg_col = &self.bg_clicked_col;
+                border_col = &self.border_clicked_col;
+                label_col = &self.label_clicked_col;
+            },
+        }
 
         window.draw_rect_f(
             self.pos_x,
@@ -259,7 +286,7 @@ impl Button {
                     y_pos,
                     &self.label,
                     self.label_size,
-                    &self.label_col,
+                    label_col,
                 );
             }
             Alignment::Right => {
@@ -282,7 +309,7 @@ impl Button {
                     y_pos,
                     &self.label,
                     self.label_size,
-                    &self.label_col,
+                    label_col,
                 );
             }
             Alignment::Center => {
@@ -303,7 +330,7 @@ impl Button {
                     y_pos,
                     &self.label,
                     self.label_size,
-                    &self.label_col,
+                    label_col,
                 );
             }
         }
@@ -316,10 +343,10 @@ impl Button {
             && (state.pos_x as usize) < self.pos_x + self.width
             && (state.pos_y as usize) < self.pos_y + self.height
         {
-            self.is_hovered = true;
+            self.state = ButtonState::Hovered;
             true
         } else {
-            self.is_hovered = false;
+            self.state = ButtonState::Idle;
             false
         }
     }
@@ -327,29 +354,28 @@ impl Button {
     pub fn is_clicked(&mut self, window: &crate::window::Window) -> bool {
         let state = window.get_mouse_state();
         if self.is_hovered(window) && state.lmb_clicked {
+            self.state = ButtonState::Clicked;
             true
         } else {
+            self.state = ButtonState::Hovered;
             false
+        }
+    }
+
+    fn update(&mut self, window: &mut crate::window::Window) {
+        match self.is_hovered(window) {
+            false => self.state = ButtonState::Idle,
+            true => match self.is_clicked(window) {
+                false => self.state = ButtonState::Hovered,
+                true => self.state = ButtonState::Clicked
+            }
         }
     }
 
     /// Draws the button to a window
     pub fn draw(&mut self, window: &mut crate::window::Window) {
         let state = window.get_mouse_state();
-        if (state.pos_x as usize) > self.pos_x
-            && (state.pos_y as usize) > self.pos_y
-            && (state.pos_x as usize) < self.pos_x + self.width
-            && (state.pos_y as usize) < self.pos_y + self.height
-        {
-            self.is_hovered = true;
-            if state.lmb_clicked {
-                self.is_clicked = true;
-            } else {
-                self.is_clicked = false;
-            }
-        } else {
-            self.is_hovered = false;
-        }
+        self.update(window);
         self.draw_button(window);
         self.draw_shadow(window);
     }
@@ -368,6 +394,14 @@ pub enum Alignment {
     Right,
     #[default]
     Center,
+}
+
+#[derive(Default)]
+pub enum ButtonState {
+    #[default]
+    Idle,
+    Hovered,
+    Clicked,
 }
 
 fn darken_pixel(window: &mut crate::window::Window, x: usize, y: usize, blend: i32) {

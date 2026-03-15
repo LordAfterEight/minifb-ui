@@ -15,7 +15,9 @@ fn main() {
             minifb_ui::ttf::Font::new("assets/whitrabt.ttf"),
             20.0
         )
-        .label_color(minifb_ui::color::Color::from(0xFFFFFF))
+        .idle_label_col(minifb_ui::color::Color::from(0xCCCCCC))
+        .hover_label_col(minifb_ui::color::Color::from(0xDDDDDD))
+        .click_label_col(minifb_ui::color::Color::from(0xAAFFAA))
         .label_alignment(minifb_ui::ui::button::Alignment::Center)
         .position(100, 100)
         .size(150, 33)
