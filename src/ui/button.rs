@@ -1,30 +1,43 @@
 #[derive(Default)]
 pub struct Button {
-    text: crate::ui::text::Text,
-    text_alignment: Alignment,
+    pub label: crate::ui::text::Text,
+    pub text_alignment: Alignment,
 
-    pos_x: usize,
-    pos_y: usize,
-    width: usize,
-    height: usize,
+    /// The Button's horizontal position in pixels
+    pub pos_x: usize,
+    /// The Button's vertical position in pixels
+    pub pos_y: usize,
 
-    border: bool,
-    border_size: usize,
+    /// The Button's width in pixels
+    pub width: usize,
+    /// The Button's height in pixels
+    pub height: usize,
 
-    inner_shadow: bool,
-    shadow_size: usize,
+    /// Whether the Button has a border or not
+    pub border: bool,
+    /// The Button's border size
+    pub border_size: usize,
 
-    text_col: crate::color::Color,
-    border_col: crate::color::Color,
-    bg_col: crate::color::Color,
+    /// Whether the Button has an inner edge shadow
+    pub inner_shadow: bool,
+    /// Button-wide shadow size
+    pub shadow_size: usize,
 
-    button_type: ButtonType,
+    /// The color of the Button's label
+    pub label_col: crate::color::Color,
+    /// The color of the Button's border
+    pub border_col: crate::color::Color,
+    /// The color of the Button's background
+    pub bg_col: crate::color::Color,
+
+    /// Whether the Button is a push button or a toggle button
+    pub button_type: ButtonType,
 }
 
 impl Button {
     /// Sets the text to be displayed inside the button
     pub fn label(mut self, text: &str, font: crate::ttf::Font) -> Self {
-        self.text = crate::ui::text::Text::new(text, font);
+        self.label = crate::ui::text::Text::new(text, font);
         self
     }
 
@@ -63,8 +76,8 @@ impl Button {
     }
 
     /// Sets the label text color
-    pub fn text_color(mut self, color: crate::color::Color) -> Self {
-        self.text_col = color;
+    pub fn label_color(mut self, color: crate::color::Color) -> Self {
+        self.label_col = color;
         self
     }
 
@@ -104,51 +117,51 @@ impl Button {
                 &self.border_col,
             );
         }
-        let y_pos = self.pos_y + (self.height - self.text.font.font.metrics('A', 16.0).height) / 2;
+        let y_pos = self.pos_y + (self.height - self.label.font.font.metrics('A', 16.0).height) / 2;
         match self.text_alignment {
             Alignment::Left => {
                 window.draw_text(
                     self.pos_x + self.border_size + 2,
                     y_pos,
-                    &self.text,
+                    &self.label,
                     16.0,
-                    &self.text_col,
+                    &self.label_col,
                 );
             }
             Alignment::Right => {
                 let mut offset = 0;
-                for c in 0..self.text.text.len() {
+                for c in 0..self.label.text.len() {
                     offset += (self
-                        .text
+                        .label
                         .font
                         .font
-                        .metrics(self.text.text.as_bytes()[c] as char, 16.0)
+                        .metrics(self.label.text.as_bytes()[c] as char, 16.0)
                         .advance_width) as usize;
                 }
                 window.draw_text(
                     (self.pos_x + self.width) - offset - 2,
                     y_pos,
-                    &self.text,
+                    &self.label,
                     16.0,
-                    &self.text_col,
+                    &self.label_col,
                 );
             }
             Alignment::Center => {
                 let mut offset = 0;
-                for c in 0..self.text.text.len() {
+                for c in 0..self.label.text.len() {
                     offset += (self
-                        .text
+                        .label
                         .font
                         .font
-                        .metrics(self.text.text.as_bytes()[c] as char, 16.0)
+                        .metrics(self.label.text.as_bytes()[c] as char, 16.0)
                         .advance_width) as usize;
                 }
                 window.draw_text(
                     (self.pos_x + self.width / 2) - offset / 2,
                     y_pos,
-                    &self.text,
+                    &self.label,
                     16.0,
-                    &self.text_col,
+                    &self.label_col,
                 );
             }
         }

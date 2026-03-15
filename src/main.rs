@@ -14,7 +14,7 @@ fn main() {
 
     let button = minifb_ui::ui::button::Button::default()
         .label("Press Me!", font)
-        .text_color(minifb_ui::color::Color::from(0xAAAAAA))
+        .label_color(minifb_ui::color::Color::from(0xAAAAAA))
         .label_alignment(minifb_ui::ui::button::Alignment::Center)
         .position(100, 100)
         .size(150, 33)
