@@ -23,8 +23,16 @@ pub struct Button {
     pub inner_shadow: bool,
     /// Button-wide shadow size
     pub shadow_size: usize,
+    /// Button-wide shadow size when hoverd
+    pub shadow_size_hovered: usize,
+    /// Button-wide shadow size when clicked
+    pub shadow_size_clicked: usize,
     /// How intense the shadows should be
     pub shadow_intensity: u8,
+    /// How intense the shadows should be when hovered
+    pub shadow_intensity_hovered: u8,
+    /// How intense the shadows should be when clicked
+    pub shadow_intensity_clicked: u8,
 
     /// The color of the Button's label
     pub label_col: crate::color::Color,
@@ -33,9 +41,24 @@ pub struct Button {
     /// The color of the Button's background
     pub bg_col: crate::color::Color,
 
+    /// The color of the Button's label when hovered
+    pub label_hovered_col: crate::color::Color,
+    /// The color of the Button's border when hovered
+    pub border_hovered_col: crate::color::Color,
+    /// The color of the Button's background when hovered
+    pub bg_hovered_col: crate::color::Color,
+
+    /// The color of the Button's label when clicked
+    pub label_clicked_col: crate::color::Color,
+    /// The color of the Button's border when clicker
+    pub border_clicked_col: crate::color::Color,
+    /// The color of the Button's background when clicked
+    pub bg_clicked_col: crate::color::Color,
+
     /// Whether the Button is a push button or a toggle button
     pub button_type: ButtonType,
 
+    is_hovered: bool,
     is_clicked: bool,
 }
 
@@ -75,27 +98,59 @@ impl Button {
     }
 
     /// Determines whether to draw shadows and how large and intense they should be
+    /// Sets values for idle, hovered and clicked state
     pub fn shadow(mut self, enable: bool, size: usize, intensity: u8) -> Self {
         self.inner_shadow = enable;
+        self.shadow_size = size;
+        self.shadow_size_hovered = size;
+        self.shadow_size_clicked = size;
+        self.shadow_intensity = intensity;
+        self.shadow_intensity_hovered = intensity;
+        self.shadow_intensity_clicked = intensity;
+        self
+    }
+
+    /// Specifically sets the idle shadow size and intensity
+    pub fn idle_shadow(mut self, size: usize, intensity: u8) -> Self {
         self.shadow_size = size;
         self.shadow_intensity = intensity;
         self
     }
 
-    /// Sets the label text color
+    /// Specifically sets the shadow size and intensity for when the Button is hovered
+    pub fn hover_shadow(mut self, size: usize, intensity: u8) -> Self {
+        self.shadow_size_hovered = size;
+        self.shadow_intensity_hovered = intensity;
+        self
+    }
+
+    /// Specifically sets the shadow size and intensity for when the Button is clicked
+    pub fn click_shadow(mut self, size: usize, intensity: u8) -> Self {
+        self.shadow_size_clicked = size;
+        self.shadow_intensity_clicked = intensity;
+        self
+    }
+
+    /// Sets the label text color for idle, hovered and clicked state
     pub fn label_color(mut self, color: crate::color::Color) -> Self {
+        self.label_hovered_col = color.clone();
+        self.label_clicked_col = color.clone();
         self.label_col = color;
         self
     }
 
-    /// Sets the border color
+    /// Sets the border color for idle, hovered and clicked state
     pub fn border_color(mut self, color: crate::color::Color) -> Self {
+        self.border_hovered_col = color.clone();
+        self.border_clicked_col = color.clone();
         self.border_col = color;
         self
     }
 
-    /// Sets the button's background color
+    /// Sets the button's background color for idle, hovered and clicked state
     pub fn bg_color(mut self, color: crate::color::Color) -> Self {
+        self.bg_hovered_col = color.clone();
+        self.bg_clicked_col = color.clone();
         self.bg_col = color;
         self
     }
@@ -108,10 +163,17 @@ impl Button {
 
     fn draw_shadow(&self, window: &mut crate::window::Window) {
         let shadow_depth = self.shadow_intensity as i32;
+        let shadow_size = match self.is_hovered {
+            true => match self.is_clicked {
+                true => self.shadow_size_clicked,
+                false => self.shadow_size_hovered,
+            },
+            false => self.shadow_size,
+        };
 
-        for i in 0..self.shadow_size {
+        for i in 0..shadow_size {
             let t_num = i as i32;
-            let t_den = self.shadow_size as i32;
+            let t_den = shadow_size as i32;
 
             let blend = shadow_depth - (shadow_depth * t_num) / t_den;
 
@@ -133,6 +195,7 @@ impl Button {
         }
     }
 
+    /// Internal helper
     fn draw_button(&self, window: &mut crate::window::Window) {
         window.draw_rect_f(
             self.pos_x,
@@ -154,7 +217,8 @@ impl Button {
 
         let lm = self.label.font.font.horizontal_line_metrics(16.0).unwrap();
 
-        let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0) + (lm.descent / 3.0))
+        let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0)
+            + (lm.descent / 3.0))
             .max(0.0) as usize;
 
         match self.text_alignment {
@@ -172,10 +236,18 @@ impl Button {
                     .label
                     .text
                     .chars()
-                    .map(|c| self.label.font.font.metrics(c, self.label_size).advance_width as usize)
+                    .map(|c| {
+                        self.label
+                            .font
+                            .font
+                            .metrics(c, self.label_size)
+                            .advance_width as usize
+                    })
                     .sum();
                 window.draw_text(
-                    (self.pos_x + self.width).saturating_sub(offset).saturating_sub(4),
+                    (self.pos_x + self.width)
+                        .saturating_sub(offset)
+                        .saturating_sub(4),
                     y_pos,
                     &self.label,
                     self.label_size,
@@ -187,7 +259,13 @@ impl Button {
                     .label
                     .text
                     .chars()
-                    .map(|c| self.label.font.font.metrics(c, self.label_size).advance_width as usize)
+                    .map(|c| {
+                        self.label
+                            .font
+                            .font
+                            .metrics(c, self.label_size)
+                            .advance_width as usize
+                    })
                     .sum();
                 window.draw_text(
                     (self.pos_x + self.width / 2).saturating_sub(offset / 2),
@@ -202,16 +280,24 @@ impl Button {
 
     /// Draws the button to a window
     pub fn draw(&mut self, window: &mut crate::window::Window) {
-        match self.is_clicked {
+        self.draw_button(window);
+        match self.is_hovered() {
             true => {
-                self.draw_button(window);
+                match self.is_clicked() {
+                    true => {}
+                    false => {}
+                }
                 self.draw_shadow(window);
             }
-            false => {
-                self.draw_button(window);
-                self.draw_shadow(window);
-            }
+            false => {}
         }
+    }
+
+    pub fn is_hovered(&mut self) -> bool {
+        false
+    }
+    pub fn is_clicked(&mut self) -> bool {
+        false
     }
 }
 

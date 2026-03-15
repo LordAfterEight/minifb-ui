@@ -2,7 +2,7 @@
 This is a crate aiming to make usage of the minifb crate easier than it already is, by providing abstractions and features for easy creation and management of windows and UI elements.
 
 # Example Usage
-```Rust
+```rust
 use minifb_ui;
 
 fn main() {
