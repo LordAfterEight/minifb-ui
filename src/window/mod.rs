@@ -192,10 +192,6 @@ impl Window {
         }
     }
 
-    /// Toggles fullscreen on/off
-    pub fn toggle_fullscreen(&mut self) {
-    }
-
     /// Updates the window. Should be called in a loop until the window is to be closed
     pub fn update(&mut self) {
         self.window

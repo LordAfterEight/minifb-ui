@@ -61,3 +61,5 @@ pub mod window;
 pub mod color;
 /// Provides UI elements you can draw in a Window
 pub mod ui;
+
+pub use minifb::{Key, KeyRepeat};
