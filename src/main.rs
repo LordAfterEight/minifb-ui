@@ -30,7 +30,6 @@ fn main() {
         .hover_bg(minifb_ui::color::Color::from(0x333333));
 
     while window.window.is_open() {
-        window.clear(&minifb_ui::color::Color::from(0x0));
         window.draw_text(
             10,
             10,
