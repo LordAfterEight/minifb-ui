@@ -22,6 +22,8 @@ pub struct Button {
     pub inner_shadow: bool,
     /// Button-wide shadow size
     pub shadow_size: usize,
+    /// How intense the shadows should be
+    pub shadow_intensity: u8,
 
     /// The color of the Button's label
     pub label_col: crate::color::Color,
@@ -32,6 +34,8 @@ pub struct Button {
 
     /// Whether the Button is a push button or a toggle button
     pub button_type: ButtonType,
+
+    is_clicked: bool,
 }
 
 impl Button {
@@ -68,10 +72,11 @@ impl Button {
         self
     }
 
-    /// Determines whether to draw shadows and how large they should be
-    pub fn shadow(mut self, enable: bool, size: usize) -> Self {
+    /// Determines whether to draw shadows and how large and intense they should be
+    pub fn shadow(mut self, enable: bool, size: usize, intensity: u8) -> Self {
         self.inner_shadow = enable;
         self.shadow_size = size;
+        self.shadow_intensity = intensity;
         self
     }
 
@@ -99,8 +104,34 @@ impl Button {
         self
     }
 
-    /// Draws the button to a window
-    pub fn draw(&self, window: &mut crate::window::Window) {
+    fn draw_shadow(&self, window: &mut crate::window::Window) {
+        let shadow_depth = self.shadow_intensity as i32;
+
+        for i in 0..self.shadow_size {
+            let t_num = i as i32;
+            let t_den = self.shadow_size as i32;
+
+            let blend = shadow_depth - (shadow_depth * t_num) / t_den;
+
+            let x = self.pos_x + self.border_size + i;
+            let y = self.pos_y + self.border_size + i;
+            let w = self.width  - (i * 2) - self.border_size * 2;
+            let h = self.height - (i * 2) - self.border_size * 2;
+
+            for px in x..x + w {
+                for py in [y, y + h - 1] {
+                    darken_pixel(window, px, py, blend);
+                }
+            }
+            for py in y + 1..y + h - 1 {
+                for px in [x, x + w - 1] {
+                    darken_pixel(window, px, py, blend);
+                }
+            }
+        }
+    }
+
+    fn draw_button(&self, window: &mut crate::window::Window) {
         window.draw_rect_f(
             self.pos_x,
             self.pos_y,
@@ -166,6 +197,20 @@ impl Button {
             }
         }
     }
+
+    /// Draws the button to a window
+    pub fn draw(&mut self, window: &mut crate::window::Window) {
+        match self.is_clicked {
+            true => {
+                self.draw_button(window);
+                self.draw_shadow(window);
+            }
+            false => {
+                self.draw_button(window);
+                self.draw_shadow(window);
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -181,4 +226,19 @@ pub enum Alignment {
     Right,
     #[default]
     Center,
+}
+
+fn darken_pixel(window: &mut crate::window::Window, x: usize, y: usize, blend: i32) {
+    let existing = window.get_pixel(x, y);
+    let er = ((existing >> 16) & 0xFF) as i32;
+    let eg = ((existing >>  8) & 0xFF) as i32;
+    let eb = ((existing      ) & 0xFF) as i32;
+
+    let r = (er - blend).clamp(0, 255) as u32;
+    let g = (eg - blend).clamp(0, 255) as u32;
+    let b = (eb - blend).clamp(0, 255) as u32;
+
+    window.draw_pixel(x, y, &crate::color::Color::from(
+        0xFF000000 | (r << 16) | (g << 8) | b,
+    ));
 }

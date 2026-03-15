@@ -60,6 +60,10 @@ impl Window {
         self.framebuffer_raw[y * self.width + x] = color.as_u32()
     }
 
+    pub fn get_pixel(&self, x: usize, y: usize) -> u32 {
+        self.framebuffer_raw[y * self.width + x]
+    }
+
     /// Draws a straight line from coordinate to coordinate with color
     pub fn draw_line(
         &mut self,

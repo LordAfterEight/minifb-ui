@@ -34,6 +34,7 @@ fn main() {
         .position(100, 100)
         .size(150, 33)
         .border(true, 1)
+        .shadow(true, 5, 75)
         .border_color(minifb_ui::color::Color::from(0x777777))
         .bg_color(minifb_ui::color::Color::from(0x202020));
 
