@@ -1,6 +1,10 @@
 # Minifb-UI
 This is a crate aiming to make usage of the minifb crate easier than it already is, by providing abstractions and features for easy creation and management of windows and UI elements.
 
+![docs.rs](https://img.shields.io/docsrs/minifb-ui)
+![Crates.io Version](https://img.shields.io/crates/v/minifb-ui)
+
+
 # Example Usage
 ```rust
 use minifb_ui;
