@@ -56,7 +56,11 @@
 //! }
 //! ```
 
+/// Provides necessary things to work with ttf and otf fonts
 pub mod ttf;
+/// Provides the Window struct and gives you everything you need to create one and draw in it
 pub mod window;
+/// Provides the Color RGBA struct
 pub mod color;
+/// Provides UI elements you can draw in a Window
 pub mod ui;

@@ -1,5 +1,3 @@
-//! This is a higher-level crate for rendering to a window using minifb as the backend.
-
 /// Owns the window and the raw flat framebuffer to be rendered.
 pub struct Window {
     pub window: minifb::Window,

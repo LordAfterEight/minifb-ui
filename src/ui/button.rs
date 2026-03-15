@@ -281,16 +281,7 @@ impl Button {
     /// Draws the button to a window
     pub fn draw(&mut self, window: &mut crate::window::Window) {
         self.draw_button(window);
-        match self.is_hovered() {
-            true => {
-                match self.is_clicked() {
-                    true => {}
-                    false => {}
-                }
-                self.draw_shadow(window);
-            }
-            false => {}
-        }
+        self.draw_shadow(window);
     }
 
     pub fn is_hovered(&mut self) -> bool {

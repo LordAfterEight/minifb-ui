@@ -20,7 +20,10 @@ fn main() {
         .position(100, 100)
         .size(150, 33)
         .border(true, 1)
-        .shadow(true, 10, 15)
+        .shadow(true, 0, 0)
+        .idle_shadow(5, 10)
+        .hover_shadow(7, 15)
+        .click_shadow(10, 20)
         .border_color(minifb_ui::color::Color::from(0x444444))
         .bg_color(minifb_ui::color::Color::from(0x222222));
 
