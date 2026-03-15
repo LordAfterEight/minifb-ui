@@ -1,5 +1,9 @@
 [package]
 name = "minifb-ui"
+description = "Light wrapper around minifb to make creation of windows and UI elements simple"
+license = "MIT"
+keywords = ["gamedev", "ui", "window", "graphics"]
+categories = ["game-development", "gui"]
 version = "0.1.0"
 edition = "2024"
 
