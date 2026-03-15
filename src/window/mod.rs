@@ -56,8 +56,8 @@ impl Window {
     }
 
     /// Draws a single pixel at given coordinates with color
-    pub fn draw_pixel(&mut self, x: usize, y: usize, color: crate::color::Color) {
-        self.framebuffer_raw[y * self.width + x] = color.to_u32()
+    pub fn draw_pixel(&mut self, x: usize, y: usize, color: &crate::color::Color) {
+        self.framebuffer_raw[y * self.width + x] = color.as_u32()
     }
 
     /// Draws a straight line from coordinate to coordinate with color
@@ -101,7 +101,7 @@ impl Window {
     }
 
     /// Draws a filled rectangle at given coordinates with size and color
-    pub fn draw_rect_f(&mut self, x: usize, y: usize, w: usize, h: usize, color: crate::color::Color) {
+    pub fn draw_rect_f(&mut self, x: usize, y: usize, w: usize, h: usize, color: &crate::color::Color) {
         let value = color.as_u32();
         let start = y * self.width + x;
         for dy in 0..h {
@@ -111,7 +111,7 @@ impl Window {
     }
 
     /// Draws a hollow rectangle at given coordinates with size and color
-    pub fn draw_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: crate::color::Color) {
+    pub fn draw_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: &crate::color::Color) {
         let value = color.as_u32();
         if h >= 1 {
             let top = y * self.width + x;
@@ -134,18 +134,28 @@ impl Window {
     }
 
     /// Draws text using the passed font
-    pub fn draw_text(&mut self, x: usize, y: usize, text: &crate::ui::Text, scale: f32, color: crate::color::Color) {
+    pub fn draw_text(&mut self, x: usize, y: usize, text: &crate::ui::text::Text, size: f32, color: &crate::color::Color) {
+        use fontdue::layout::{Layout, LayoutSettings, CoordinateSystem, TextStyle};
+
         let fg_r = color.r as u32;
         let fg_g = color.g as u32;
         let fg_b = color.b as u32;
 
-        let mut cursor_x = x as i32;
+        let fonts = text.font.as_slice();
 
-        for ch in text.text.chars() {
-            let (metrics, bitmap) = text.font.font.rasterize(ch, scale);
+        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+        layout.reset(&LayoutSettings {
+            x: x as f32,
+            y: y as f32,
+            ..Default::default()
+        });
+        layout.append(&fonts, &TextStyle::new(&text.text, size, 0));
 
-            let glyph_x = cursor_x;
-            let glyph_y = y as i32 - metrics.height as i32 - metrics.ymin;
+        for glyph in layout.glyphs() {
+            let (metrics, bitmap) = text.font.font.rasterize_config(glyph.key);
+
+            let glyph_x = glyph.x as i32;
+            let glyph_y = glyph.y as i32;
 
             for row in 0..metrics.height {
                 for col in 0..metrics.width {
@@ -172,8 +182,6 @@ impl Window {
                     self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
                 }
             }
-
-            cursor_x += metrics.advance_width as i32;
         }
     }
 

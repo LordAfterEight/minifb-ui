@@ -1,5 +1,5 @@
 /// RGBA color struct
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
