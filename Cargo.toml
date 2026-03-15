@@ -6,6 +6,8 @@ keywords = ["gamedev", "ui", "window", "graphics"]
 categories = ["game-development", "gui"]
 version = "0.1.0"
 edition = "2024"
+documentation = "https://docs.rs/minifbui"
+repository = "https://github.com/LordAfterEight/minifb-ui"
 
 [dependencies]
 fontdue = "0.9.3"
