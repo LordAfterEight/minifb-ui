@@ -21,11 +21,10 @@ fn main() {
         .label_alignment(minifb_ui::ui::button::Alignment::Center)
         .position(100, 100)
         .size(150, 33)
-        .border(true, 1)
-        .shadow(true, 0, 0)
+        .border(2)
         .idle_shadow(5, 10)
         .hover_shadow(7, 20)
-        .click_shadow(10, 20)
+        .click_shadow(10, 10)
         .border_color(minifb_ui::color::Color::from(0x444444))
         .background(minifb_ui::color::Color::from(0x222222))
         .hover_bg(minifb_ui::color::Color::from(0x333333));
