@@ -1,6 +1,7 @@
 #[derive(Default)]
 pub struct Button {
     pub label: crate::ui::text::Text,
+    pub label_size: f32,
     pub text_alignment: Alignment,
 
     /// The Button's horizontal position in pixels
@@ -40,8 +41,9 @@ pub struct Button {
 
 impl Button {
     /// Sets the text to be displayed inside the button
-    pub fn label(mut self, text: &str, font: crate::ttf::Font) -> Self {
+    pub fn label(mut self, text: &str, font: crate::ttf::Font, size: f32) -> Self {
         self.label = crate::ui::text::Text::new(text, font);
+        self.label_size = size;
         self
     }
 
@@ -115,7 +117,7 @@ impl Button {
 
             let x = self.pos_x + self.border_size + i;
             let y = self.pos_y + self.border_size + i;
-            let w = self.width  - (i * 2) - self.border_size * 2;
+            let w = self.width - (i * 2) - self.border_size * 2;
             let h = self.height - (i * 2) - self.border_size * 2;
 
             for px in x..x + w {
@@ -139,6 +141,7 @@ impl Button {
             self.height,
             &self.bg_col,
         );
+
         for i in 0..self.border_size {
             window.draw_rect(
                 self.pos_x + i,
@@ -148,50 +151,49 @@ impl Button {
                 &self.border_col,
             );
         }
-        let y_pos = self.pos_y + (self.height - self.label.font.font.metrics('A', 16.0).height) / 2;
+
+        let lm = self.label.font.font.horizontal_line_metrics(16.0).unwrap();
+
+        let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0) + (lm.descent / 3.0))
+            .max(0.0) as usize;
+
         match self.text_alignment {
             Alignment::Left => {
                 window.draw_text(
-                    self.pos_x + self.border_size + 2,
+                    self.pos_x + self.border_size + 4,
                     y_pos,
                     &self.label,
-                    16.0,
+                    self.label_size,
                     &self.label_col,
                 );
             }
             Alignment::Right => {
-                let mut offset = 0;
-                for c in 0..self.label.text.len() {
-                    offset += (self
-                        .label
-                        .font
-                        .font
-                        .metrics(self.label.text.as_bytes()[c] as char, 16.0)
-                        .advance_width) as usize;
-                }
+                let offset: usize = self
+                    .label
+                    .text
+                    .chars()
+                    .map(|c| self.label.font.font.metrics(c, self.label_size).advance_width as usize)
+                    .sum();
                 window.draw_text(
-                    (self.pos_x + self.width) - offset - 2,
+                    (self.pos_x + self.width).saturating_sub(offset).saturating_sub(4),
                     y_pos,
                     &self.label,
-                    16.0,
+                    self.label_size,
                     &self.label_col,
                 );
             }
             Alignment::Center => {
-                let mut offset = 0;
-                for c in 0..self.label.text.len() {
-                    offset += (self
-                        .label
-                        .font
-                        .font
-                        .metrics(self.label.text.as_bytes()[c] as char, 16.0)
-                        .advance_width) as usize;
-                }
+                let offset: usize = self
+                    .label
+                    .text
+                    .chars()
+                    .map(|c| self.label.font.font.metrics(c, self.label_size).advance_width as usize)
+                    .sum();
                 window.draw_text(
-                    (self.pos_x + self.width / 2) - offset / 2,
+                    (self.pos_x + self.width / 2).saturating_sub(offset / 2),
                     y_pos,
                     &self.label,
-                    16.0,
+                    self.label_size,
                     &self.label_col,
                 );
             }
@@ -231,14 +233,16 @@ pub enum Alignment {
 fn darken_pixel(window: &mut crate::window::Window, x: usize, y: usize, blend: i32) {
     let existing = window.get_pixel(x, y);
     let er = ((existing >> 16) & 0xFF) as i32;
-    let eg = ((existing >>  8) & 0xFF) as i32;
-    let eb = ((existing      ) & 0xFF) as i32;
+    let eg = ((existing >> 8) & 0xFF) as i32;
+    let eb = ((existing) & 0xFF) as i32;
 
     let r = (er - blend).clamp(0, 255) as u32;
     let g = (eg - blend).clamp(0, 255) as u32;
     let b = (eb - blend).clamp(0, 255) as u32;
 
-    window.draw_pixel(x, y, &crate::color::Color::from(
-        0xFF000000 | (r << 16) | (g << 8) | b,
-    ));
+    window.draw_pixel(
+        x,
+        y,
+        &crate::color::Color::from(0xFF000000 | (r << 16) | (g << 8) | b),
+    );
 }

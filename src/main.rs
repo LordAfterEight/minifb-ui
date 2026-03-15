@@ -1,30 +1,38 @@
 use minifb_ui;
 
 fn main() {
-    let mut window = minifb_ui::window::Window::custom(
-        "TestWindow",
-        1920,
-        1080,
-        false,
-        false,
-    );
+    let mut window = minifb_ui::window::Window::custom("TestWindow", 1920, 1080, false, false);
 
     let font = minifb_ui::ttf::Font::new("assets/Dico.ttf");
-    let text = minifb_ui::ui::text::Text::new("The quick brown fox jumps over the lazy dog  !\"§$%&/()=?+~*#'-_.:,;<>|", font.clone());
+    let text = minifb_ui::ui::text::Text::new(
+        "The quick brown fox jumps over the lazy dog  !\"§$%&/()=?+~*#'-_.:,;<>|",
+        font,
+    );
 
     let mut button = minifb_ui::ui::button::Button::default()
-        .label("Press Me!", font)
-        .label_color(minifb_ui::color::Color::from(0x222222))
+        .label(
+            "Press Me!",
+            minifb_ui::ttf::Font::new("assets/whitrabt.ttf"),
+            20.0
+        )
+        .label_color(minifb_ui::color::Color::from(0xFFFFFF))
         .label_alignment(minifb_ui::ui::button::Alignment::Center)
         .position(100, 100)
         .size(150, 33)
         .border(true, 1)
-        .shadow(true, 5, 75)
-        .border_color(minifb_ui::color::Color::from(0xBBBBBB))
-        .bg_color(minifb_ui::color::Color::from(0xAAAAAA));
+        .shadow(true, 10, 15)
+        .border_color(minifb_ui::color::Color::from(0x444444))
+        .bg_color(minifb_ui::color::Color::from(0x222222));
 
     while window.window.is_open() {
-        window.draw_text(10, 10, &text, 16.0, &minifb_ui::color::Color::from(0xFFFFFF));
+        window.clear(&minifb_ui::color::Color::from(0x0));
+        window.draw_text(
+            10,
+            10,
+            &text,
+            16.0,
+            &minifb_ui::color::Color::from(0xFFFFFF),
+        );
         button.draw(&mut window);
         window.update();
     }

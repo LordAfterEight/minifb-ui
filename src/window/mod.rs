@@ -64,6 +64,10 @@ impl Window {
         self.framebuffer_raw[y * self.width + x]
     }
 
+    pub fn clear(&mut self, color: &crate::color::Color) {
+        self.draw_rect_f(0, 0, self.width, self.height, color);
+    }
+
     /// Draws a straight line from coordinate to coordinate with color
     pub fn draw_line(
         &mut self,
@@ -153,6 +157,7 @@ impl Window {
             y: y as f32,
             ..Default::default()
         });
+
         layout.append(&fonts, &TextStyle::new(&text.text, size, 0));
 
         for glyph in layout.glyphs() {
