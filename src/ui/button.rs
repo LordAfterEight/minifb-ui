@@ -1,6 +1,6 @@
 #[derive(Default)]
 pub struct Button {
-    pub label: crate::ui::text::Text,
+    pub label: Option<crate::ui::text::Text>,
     pub label_size: f32,
     pub text_alignment: Alignment,
 
@@ -65,7 +65,7 @@ pub struct Button {
 impl Button {
     /// Sets the text to be displayed inside the button
     pub fn label(mut self, text: &str, font: crate::ttf::Font, size: f32) -> Self {
-        self.label = crate::ui::text::Text::new(text, font);
+        self.label = Some(crate::ui::text::Text::new(text, font));
         self.label_size = size;
         self
     }
@@ -290,67 +290,68 @@ impl Button {
             );
         }
 
-        let lm = self.label.font.font.horizontal_line_metrics(16.0).unwrap();
+        if let Some(label) = &self.label {
+            let lm = label.font.font.horizontal_line_metrics(16.0).unwrap();
 
-        let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0)
-            + (lm.descent / 3.0))
-            .max(0.0) as usize;
+            let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0)
+                + (lm.descent / 3.0))
+                .max(0.0) as usize;
 
-        match self.text_alignment {
-            Alignment::Left => {
-                window.draw_text(
-                    self.pos_x + border_size + 4,
-                    y_pos,
-                    &self.label,
-                    self.label_size,
-                    label_col,
-                );
-            }
-            Alignment::Right => {
-                let offset: usize = self
-                    .label
-                    .text
-                    .chars()
-                    .map(|c| {
-                        self.label
-                            .font
-                            .font
-                            .metrics(c, self.label_size)
-                            .advance_width as usize
-                    })
-                    .sum();
-                window.draw_text(
-                    (self.pos_x + self.width)
-                        .saturating_sub(offset)
-                        .saturating_sub(4),
-                    y_pos,
-                    &self.label,
-                    self.label_size,
-                    label_col,
-                );
-            }
-            Alignment::Center => {
-                let offset: usize = self
-                    .label
-                    .text
-                    .chars()
-                    .map(|c| {
-                        self.label
-                            .font
-                            .font
-                            .metrics(c, self.label_size)
-                            .advance_width as usize
-                    })
-                    .sum();
-                window.draw_text(
-                    (self.pos_x + self.width / 2).saturating_sub(offset / 2),
-                    y_pos,
-                    &self.label,
-                    self.label_size,
-                    label_col,
-                );
+            match self.text_alignment {
+                Alignment::Left => {
+                    window.draw_text(
+                        self.pos_x + border_size + 4,
+                        y_pos,
+                        &label,
+                        self.label_size,
+                        label_col,
+                    );
+                }
+                Alignment::Right => {
+                    let offset: usize = label
+                        .text
+                        .chars()
+                        .map(|c| {
+                            label
+                                .font
+                                .font
+                                .metrics(c, self.label_size)
+                                .advance_width as usize
+                        })
+                        .sum();
+                    window.draw_text(
+                        (self.pos_x + self.width)
+                            .saturating_sub(offset)
+                            .saturating_sub(4),
+                        y_pos,
+                        &label,
+                        self.label_size,
+                        label_col,
+                    );
+                }
+                Alignment::Center => {
+                    let offset: usize = label
+                        .text
+                        .chars()
+                        .map(|c| {
+                            label
+                                .font
+                                .font
+                                .metrics(c, self.label_size)
+                                .advance_width as usize
+                        })
+                        .sum();
+                    window.draw_text(
+                        (self.pos_x + self.width / 2).saturating_sub(offset / 2),
+                        y_pos,
+                        &label,
+                        self.label_size,
+                        label_col,
+                    );
+                }
             }
         }
+
     }
 
     pub fn is_hovered(&mut self, window: &crate::window::Window) -> bool {

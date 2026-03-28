@@ -19,12 +19,3 @@ impl Text {
         return width;
     }
 }
-
-impl Default for Text {
-    fn default() -> Self {
-        Self {
-            font: crate::ttf::Font::new("assets/Dico.ttf"),
-            text: "Default".to_string()
-        }
-    }
-}
