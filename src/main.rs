@@ -1,13 +1,3 @@
-# Minifb-UI
-This is a crate aiming to make usage of the minifb crate easier than it already is, by providing abstractions and features for easy creation and management of windows and UI elements.
-
-![docs.rs](https://img.shields.io/docsrs/minifb-ui)
-![Crates.io Version](https://img.shields.io/crates/v/minifb-ui)
-![GitHub License](https://img.shields.io/github/license/lordaftereight/minifb-ui)
-
-
-# Example Usage
-```rust
 use minifb_ui;
 
 fn main() {
@@ -51,14 +41,3 @@ fn main() {
         window.update();
     }
 }
-```
-### This is what this button looks like when idle, hovered and clicked!
-<p align="center">
-    <img align=center src="example/example1_idle.png">
-</p>
-<p align="center">
-    <img align=center src="example/example1_hovered.png">
-</p>
-<p align="center">
-    <img align=center src="example/example1_clicked.png">
-</p>
