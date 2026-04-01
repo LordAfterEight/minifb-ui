@@ -12,7 +12,7 @@
 //! fn main() {
 //!     let mut window = minifb_ui::window::Window::custom("TestWindow", 1920, 1080, false, false);
 //!
-//!     let font = minifb_ui::ttf::Font::new("assets/Dico.ttf");
+//!     let font = minifb_ui::ttf::Font::new("assets/Dico.ttf").unwrap();
 //!     let text = minifb_ui::ui::text::Text::new(
 //!         "The quick brown fox jumps over the lazy dog  !\"§$%&/()=?+~*#'-_.:,;<>|",
 //!         font,
@@ -21,7 +21,7 @@
 //!     let mut button = minifb_ui::ui::button::Button::default()
 //!         .label(
 //!             "Press Me!",
-//!             minifb_ui::ttf::Font::new("assets/whitrabt.ttf"),
+//!             minifb_ui::ttf::Font::new("assets/whitrabt.ttf").unwrap(),
 //!             20.0
 //!         )
 //!         .idle_label_col(minifb_ui::color::Color::from(0xCCCCCC))

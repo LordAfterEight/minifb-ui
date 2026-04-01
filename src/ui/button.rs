@@ -50,7 +50,7 @@ pub struct Button {
 
     /// The color of the Button's label when clicked
     pub label_col_clicked: crate::color::Color,
-    /// The color of the Button's border when clicker
+    /// The color of the Button's border when clicked
     pub border_col_clicked: crate::color::Color,
     /// The color of the Button's background when clicked
     pub bg_col_clicked: crate::color::Color,
@@ -60,6 +60,9 @@ pub struct Button {
 
     /// The current state of the Button. Can be Idle, Hovered or Clicked
     pub state: ButtonState,
+
+    /// Whether the toggle button is currently toggled on (only relevant for ButtonType::Toggle)
+    pub toggled: bool,
 }
 
 impl Button {
@@ -70,7 +73,7 @@ impl Button {
         self
     }
 
-    /// Determines whether the button lable is left-aligned, right-aligned or centered
+    /// Determines whether the button label is left-aligned, right-aligned or centered
     pub fn label_alignment(mut self, alignment: Alignment) -> Self {
         self.text_alignment = alignment;
         self
@@ -139,19 +142,19 @@ impl Button {
         self
     }
 
-    /// Specifically sets the lable color for when the Button is idle
+    /// Specifically sets the label color for when the Button is idle
     pub fn idle_label_col(mut self, color: crate::color::Color) -> Self {
         self.label_col_idle = color;
         self
     }
 
-    /// Specifically sets the lable color for when the Button is hovered
+    /// Specifically sets the label color for when the Button is hovered
     pub fn hover_label_col(mut self, color: crate::color::Color) -> Self {
         self.label_col_hovered = color;
         self
     }
 
-    /// Specifically sets the lable color for when the Button is clicked
+    /// Specifically sets the label color for when the Button is clicked
     pub fn click_label_col(mut self, color: crate::color::Color) -> Self {
         self.label_col_clicked = color;
         self
@@ -173,19 +176,19 @@ impl Button {
         self
     }
 
-    /// Specifically sets the background color for when the Butoon is idle
+    /// Specifically sets the background color for when the Button is idle
     pub fn idle_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_col_idle = color;
         self
     }
 
-    /// Specifically sets the background color for when the Butoon is hovered
+    /// Specifically sets the background color for when the Button is hovered
     pub fn hover_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_col_hovered = color;
         self
     }
 
-    /// Specifically sets the background color for when the Butoon is clicked
+    /// Specifically sets the background color for when the Button is clicked
     pub fn click_bg(mut self, color: crate::color::Color) -> Self {
         self.bg_col_clicked = color;
         self
@@ -228,8 +231,8 @@ impl Button {
 
             let x = self.pos_x + border_size + i;
             let y = self.pos_y + border_size + i;
-            let w = self.width - (i * 2) - border_size * 2;
-            let h = self.height - (i * 2) - border_size * 2;
+            let w = self.width.saturating_sub(i * 2).saturating_sub(border_size * 2);
+            let h = self.height.saturating_sub(i * 2).saturating_sub(border_size * 2);
 
             for px in x..x + w {
                 for py in [y, y + h - 1] {
@@ -354,45 +357,55 @@ impl Button {
 
     }
 
-    pub fn is_hovered(&mut self, window: &crate::window::Window) -> bool {
+    pub fn is_hovered(&self, window: &crate::window::Window) -> bool {
         let state = window.get_mouse_state();
-        if (state.pos_x as usize) > self.pos_x
+        (state.pos_x as usize) > self.pos_x
             && (state.pos_y as usize) > self.pos_y
             && (state.pos_x as usize) < self.pos_x + self.width
             && (state.pos_y as usize) < self.pos_y + self.height
-        {
-            self.state = ButtonState::Hovered;
-            true
-        } else {
-            self.state = ButtonState::Idle;
-            false
-        }
     }
 
-    pub fn is_left_clicked(&mut self, window: &crate::window::Window) -> bool {
+    pub fn is_left_clicked(&self, window: &crate::window::Window) -> bool {
         let state = window.get_mouse_state();
-        if self.is_hovered(window) && state.lmb_clicked {
-            self.state = ButtonState::Clicked;
-            return true
-        }
-        false
+        self.is_hovered(window) && state.lmb_clicked
     }
 
-    pub fn is_right_clicked(&mut self, window: &crate::window::Window) -> bool {
+    pub fn is_right_clicked(&self, window: &crate::window::Window) -> bool {
         let state = window.get_mouse_state();
-        if self.is_hovered(window) && state.rmb_clicked {
-            self.state = ButtonState::Clicked;
-            return true
-        }
-        false
+        self.is_hovered(window) && state.rmb_clicked
     }
 
     fn update(&mut self, window: &mut crate::window::Window) {
-        match self.is_hovered(window) {
-            false => self.state = ButtonState::Idle,
-            true => match self.is_left_clicked(window) || self.is_right_clicked(window) {
-                false => self.state = ButtonState::Hovered,
-                true => self.state = ButtonState::Clicked
+        let mouse = window.get_mouse_state();
+        let hovered = (mouse.pos_x as usize) > self.pos_x
+            && (mouse.pos_y as usize) > self.pos_y
+            && (mouse.pos_x as usize) < self.pos_x + self.width
+            && (mouse.pos_y as usize) < self.pos_y + self.height;
+        let clicked = hovered && (mouse.lmb_clicked || mouse.rmb_clicked);
+
+        match self.button_type {
+            ButtonType::Push => {
+                self.state = if clicked {
+                    ButtonState::Clicked
+                } else if hovered {
+                    ButtonState::Hovered
+                } else {
+                    ButtonState::Idle
+                };
+            }
+            ButtonType::Toggle => {
+                if clicked && !self.toggled {
+                    self.toggled = true;
+                } else if clicked && self.toggled {
+                    self.toggled = false;
+                }
+                self.state = if self.toggled {
+                    ButtonState::Clicked
+                } else if hovered {
+                    ButtonState::Hovered
+                } else {
+                    ButtonState::Idle
+                };
             }
         }
     }

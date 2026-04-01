@@ -41,7 +41,7 @@ impl Window {
                     resize: resizable,
                     scale: minifb::Scale::X1,
                     scale_mode: minifb::ScaleMode::Center,
-                    borderless:borders,
+                    borderless: borders,
                     ..Default::default()
                 },
             )
