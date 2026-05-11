@@ -63,3 +63,8 @@ pub mod color;
 pub mod ui;
 
 pub use minifb::{Key, KeyRepeat};
+
+pub use color::Color;
+pub use ttf::Font;
+pub use window::Window;
+pub use ui::{Text, Button, ButtonType, Alignment, Slider, TextInput, Switch};

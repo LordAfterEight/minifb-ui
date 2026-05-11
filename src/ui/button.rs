@@ -63,6 +63,9 @@ pub struct Button {
 
     /// Whether the toggle button is currently toggled on (only relevant for ButtonType::Toggle)
     pub toggled: bool,
+
+    /// Corner radius for rounded edges
+    pub radius: usize,
 }
 
 impl Button {
@@ -200,6 +203,12 @@ impl Button {
         self
     }
 
+    /// Sets the corner radius for rounded edges
+    pub fn radius(mut self, radius: usize) -> Self {
+        self.radius = radius;
+        self
+    }
+
     fn draw_shadow(&self, window: &mut crate::window::Window) {
         let shadow_depth;
         let shadow_size;
@@ -223,25 +232,38 @@ impl Button {
             }
         }
 
-        for i in 0..shadow_size {
-            let t_num = i as i32;
-            let t_den = shadow_size as i32;
+        // Draw inset shadow as concentric rounded-rect rings
+        let inner_x = self.pos_x + border_size;
+        let inner_y = self.pos_y + border_size;
+        let inner_w = self.width.saturating_sub(border_size * 2);
+        let inner_h = self.height.saturating_sub(border_size * 2);
+        let inner_r = self.radius.saturating_sub(border_size) as f32;
 
-            let blend = (shadow_depth as i32) - ((shadow_depth as i32) * t_num) / t_den;
+        let cx = inner_x as f32 + inner_w as f32 / 2.0;
+        let cy = inner_y as f32 + inner_h as f32 / 2.0;
+        let hw = inner_w as f32 / 2.0;
+        let hh = inner_h as f32 / 2.0;
 
-            let x = self.pos_x + border_size + i;
-            let y = self.pos_y + border_size + i;
-            let w = self.width.saturating_sub(i * 2).saturating_sub(border_size * 2);
-            let h = self.height.saturating_sub(i * 2).saturating_sub(border_size * 2);
+        for py in inner_y..inner_y + inner_h {
+            for px in inner_x..inner_x + inner_w {
+                // Signed distance from the inner edge (negative = inside)
+                let pfx = px as f32 + 0.5;
+                let pfy = py as f32 + 0.5;
+                let dx = (pfx - cx).abs() - (hw - inner_r);
+                let dy = (pfy - cy).abs() - (hh - inner_r);
+                let outside = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt();
+                let inside = dx.max(dy).min(0.0);
+                let dist = outside + inside - inner_r; // negative inside
 
-            for px in x..x + w {
-                for py in [y, y + h - 1] {
-                    darken_pixel(window, px, py, blend);
-                }
-            }
-            for py in y + 1..y + h - 1 {
-                for px in [x, x + w - 1] {
-                    darken_pixel(window, px, py, blend);
+                // dist is negative inside; the edge is at dist=0
+                // Shadow starts at the edge and fades inward
+                let depth = -dist; // positive near edge, grows toward center
+                if depth > 0.0 && depth <= shadow_size as f32 {
+                    let t = 1.0 - (depth / shadow_size as f32);
+                    let blend = (shadow_depth as f32 * t) as i32;
+                    if blend > 0 {
+                        darken_pixel(window, px, py, blend);
+                    }
                 }
             }
         }
@@ -275,30 +297,34 @@ impl Button {
             },
         }
 
-        window.draw_rect_f(
+        window.draw_rounded_rect_f(
             self.pos_x,
             self.pos_y,
             self.width,
             self.height,
+            self.radius,
             bg_col,
         );
 
         for i in 0..border_size {
-            window.draw_rect(
+            window.draw_rounded_rect(
                 self.pos_x + i,
                 self.pos_y + i,
                 self.width - i * 2,
                 self.height - i * 2,
+                self.radius.saturating_sub(i),
                 border_col,
             );
         }
 
         if let Some(label) = &self.label {
-            let lm = label.font.font.horizontal_line_metrics(16.0).unwrap();
+            let lm = label.font.font.horizontal_line_metrics(self.label_size).unwrap();
 
             let y_pos = (self.pos_y as f32 + (self.height as f32 / 2.0) - (lm.ascent / 2.0)
                 + (lm.descent / 3.0))
                 .max(0.0) as usize;
+
+            let text_width = label.get_width_precise(self.label_size);
 
             match self.text_alignment {
                 Alignment::Left => {
@@ -311,21 +337,9 @@ impl Button {
                     );
                 }
                 Alignment::Right => {
-                    let offset: usize = label
-                        .text
-                        .chars()
-                        .map(|c| {
-                            label
-                                .font
-                                .font
-                                .metrics(c, self.label_size)
-                                .advance_width as usize
-                        })
-                        .sum();
+                    let x = (self.pos_x + self.width) as f32 - text_width - 4.0;
                     window.draw_text(
-                        (self.pos_x + self.width)
-                            .saturating_sub(offset)
-                            .saturating_sub(4),
+                        x.max(0.0) as usize,
                         y_pos,
                         &label,
                         self.label_size,
@@ -333,19 +347,9 @@ impl Button {
                     );
                 }
                 Alignment::Center => {
-                    let offset: usize = label
-                        .text
-                        .chars()
-                        .map(|c| {
-                            label
-                                .font
-                                .font
-                                .metrics(c, self.label_size)
-                                .advance_width as usize
-                        })
-                        .sum();
+                    let x = self.pos_x as f32 + (self.width as f32 / 2.0) - (text_width / 2.0);
                     window.draw_text(
-                        (self.pos_x + self.width / 2).saturating_sub(offset / 2),
+                        x.max(0.0) as usize,
                         y_pos,
                         &label,
                         self.label_size,

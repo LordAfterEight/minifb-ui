@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 #[derive(Clone)]
 pub struct Font {
-    pub font: fontdue::Font,
+    pub font: Arc<fontdue::Font>,
 }
 
 impl Font {
@@ -16,7 +18,7 @@ impl Font {
             },
         )
         .map_err(|e| format!("Could not create font: {}", e))?;
-        Ok(Self { font })
+        Ok(Self { font: Arc::new(font) })
     }
     pub fn as_slice(&self) -> [&fontdue::Font; 1] {
         [&self.font]
