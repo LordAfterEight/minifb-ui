@@ -25,6 +25,7 @@ pub struct Window {
     /// Higher values produce softer/blurrier edges.
     pub aa: f32,
     input_buffer: Arc<Mutex<Vec<char>>>,
+    clip_stack: Vec<(usize, usize, usize, usize)>,
 }
 
 impl Window {
@@ -54,6 +55,7 @@ impl Window {
             is_fullscreen: false,
             aa: 1.0,
             input_buffer,
+            clip_stack: Vec::new(),
         }
     }
 
@@ -84,6 +86,7 @@ impl Window {
             is_fullscreen: false,
             aa: 1.0,
             input_buffer,
+            clip_stack: Vec::new(),
         }
     }
 
@@ -96,9 +99,29 @@ impl Window {
         }
     }
 
-    /// Draws a single pixel at given coordinates with color
+    /// Draws a single pixel at given coordinates with color, respecting alpha
     pub fn draw_pixel(&mut self, x: usize, y: usize, color: &crate::color::Color) {
-        self.framebuffer_raw[y * self.width + x] = color.as_u32()
+        if x >= self.width || y >= self.height {
+            return;
+        }
+        let alpha = color.a as u32;
+        if alpha == 0 {
+            return;
+        }
+        let idx = y * self.width + x;
+        if alpha == 255 {
+            self.framebuffer_raw[idx] = color.as_u32();
+            return;
+        }
+        let bg = self.framebuffer_raw[idx];
+        let bg_r = (bg >> 16) & 0xFF;
+        let bg_g = (bg >> 8) & 0xFF;
+        let bg_b = bg & 0xFF;
+        let inv = 255 - alpha;
+        let r = (color.r as u32 * alpha + bg_r * inv) / 255;
+        let g = (color.g as u32 * alpha + bg_g * inv) / 255;
+        let b = (color.b as u32 * alpha + bg_b * inv) / 255;
+        self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> u32 {
@@ -184,107 +207,97 @@ impl Window {
 
     // ─── Rectangles ─────────────────────────────────────────────────────
 
-    /// Draws a filled rectangle (axis-aligned, no AA needed)
-    pub fn draw_rect_f(&mut self, x: usize, y: usize, w: usize, h: usize, color: &crate::color::Color) {
-        let value = color.as_u32();
-        let start = y * self.width + x;
-        for dy in 0..h {
-            let row = &mut self.framebuffer_raw[start + dy * self.width..][..w];
-            row.fill(value);
-        }
-    }
-
-    /// Draws a hollow rectangle (axis-aligned, no AA needed)
-    pub fn draw_rect(&mut self, x: usize, y: usize, w: usize, h: usize, color: &crate::color::Color) {
-        let value = color.as_u32();
-        if h >= 1 {
-            let top = y * self.width + x;
-            self.framebuffer_raw[top..top + w].fill(value);
-        }
-        if h >= 2 {
-            let bottom = (y + h - 1) * self.width + x;
-            self.framebuffer_raw[bottom..bottom + w].fill(value);
-        }
-        if w >= 2 && h >= 2 {
-            let left_start = (y + 1) * self.width + x;
-            let right_start = (y + 1) * self.width + x + w - 1;
-            for dy in 0..(h - 2) {
-                let offset = dy * self.width;
-                self.framebuffer_raw[left_start + offset] = value;
-                self.framebuffer_raw[right_start + offset] = value;
+    /// Draws a filled rectangle with optional rounded corners, alpha blending, and background blur.
+    /// Pass `radius: 0` for sharp corners, `blur: 0` for no blur.
+    pub fn draw_rect_f(&mut self, x: usize, y: usize, w: usize, h: usize, radius: usize, color: &crate::color::Color, blur: usize) {
+        if radius > 0 {
+            if blur > 0 {
+                self.blur_region_rounded(x, y, w, h, radius, blur);
+            }
+            if color.a == 0 {
+                return;
+            }
+            let base_alpha = color.a as f32 / 255.0;
+            if self.aa > 0.0 {
+                self.draw_rounded_rect_f_sdf(x as f32, y as f32, w as f32, h as f32, radius as f32, color, base_alpha);
+            } else if color.a == 255 {
+                self.draw_rounded_rect_f_aliased(x, y, w, h, radius, color);
+            } else {
+                self.draw_rounded_rect_f_sdf(x as f32, y as f32, w as f32, h as f32, radius as f32, color, base_alpha);
+            }
+        } else {
+            if blur > 0 {
+                self.blur_region(x, y, w, h, blur);
+            }
+            let alpha = color.a as u32;
+            if alpha == 0 {
+                return;
+            }
+            if alpha == 255 {
+                let value = color.as_u32();
+                let start = y * self.width + x;
+                for dy in 0..h {
+                    let row = &mut self.framebuffer_raw[start + dy * self.width..][..w];
+                    row.fill(value);
+                }
+                return;
+            }
+            let fg_r = color.r as u32;
+            let fg_g = color.g as u32;
+            let fg_b = color.b as u32;
+            let inv = 255 - alpha;
+            for dy in 0..h {
+                let row = (y + dy) * self.width + x;
+                for dx in 0..w {
+                    let idx = row + dx;
+                    let bg = self.framebuffer_raw[idx];
+                    let bg_r = (bg >> 16) & 0xFF;
+                    let bg_g = (bg >> 8) & 0xFF;
+                    let bg_b = bg & 0xFF;
+                    let r = (fg_r * alpha + bg_r * inv) / 255;
+                    let g = (fg_g * alpha + bg_g * inv) / 255;
+                    let b = (fg_b * alpha + bg_b * inv) / 255;
+                    self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
+                }
             }
         }
     }
 
-    // ─── Rounded Rectangles ─────────────────────────────────────────────
-
-    /// Draws a filled rounded rectangle
-    pub fn draw_rounded_rect_f(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        radius: usize,
-        color: &crate::color::Color,
-    ) {
-        if self.aa > 0.0 {
-            self.draw_rounded_rect_f_sdf(x as f32, y as f32, w as f32, h as f32, radius as f32, color);
+    /// Draws a hollow rectangle with optional rounded corners.
+    /// Pass `radius: 0` for sharp corners.
+    pub fn draw_rect(&mut self, x: usize, y: usize, w: usize, h: usize, radius: usize, color: &crate::color::Color) {
+        if radius > 0 {
+            if self.aa > 0.0 {
+                self.draw_rounded_rect_sdf(x as f32, y as f32, w as f32, h as f32, radius as f32, 1.0, color);
+            } else {
+                self.draw_rounded_rect_aliased(x, y, w, h, radius, color);
+            }
         } else {
-            self.draw_rounded_rect_f_aliased(x, y, w, h, radius, color);
+            let value = color.as_u32();
+            if h >= 1 {
+                let top = y * self.width + x;
+                self.framebuffer_raw[top..top + w].fill(value);
+            }
+            if h >= 2 {
+                let bottom = (y + h - 1) * self.width + x;
+                self.framebuffer_raw[bottom..bottom + w].fill(value);
+            }
+            if w >= 2 && h >= 2 {
+                let left_start = (y + 1) * self.width + x;
+                let right_start = (y + 1) * self.width + x + w - 1;
+                for dy in 0..(h - 2) {
+                    let offset = dy * self.width;
+                    self.framebuffer_raw[left_start + offset] = value;
+                    self.framebuffer_raw[right_start + offset] = value;
+                }
+            }
         }
     }
 
-    /// Draws a hollow rounded rectangle
-    pub fn draw_rounded_rect(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        radius: usize,
-        color: &crate::color::Color,
-    ) {
-        if self.aa > 0.0 {
-            self.draw_rounded_rect_sdf(x as f32, y as f32, w as f32, h as f32, radius as f32, 1.0, color);
-        } else {
-            self.draw_rounded_rect_aliased(x, y, w, h, radius, color);
-        }
-    }
+    // ─── Ellipses (and circles) ───────────────────────────────────────────
 
-    // ─── Circles / Ellipses ─────────────────────────────────────────────
-
-    /// Draws a filled circle
-    pub fn draw_circle_f(
-        &mut self,
-        cx: isize,
-        cy: isize,
-        radius: usize,
-        color: &crate::color::Color,
-    ) {
-        if self.aa > 0.0 {
-            self.draw_circle_f_sdf(cx as f32, cy as f32, radius as f32, color);
-        } else {
-            self.draw_circle_f_aliased(cx, cy, radius, color);
-        }
-    }
-
-    /// Draws a hollow circle
-    pub fn draw_circle(
-        &mut self,
-        cx: isize,
-        cy: isize,
-        radius: usize,
-        color: &crate::color::Color,
-    ) {
-        if self.aa > 0.0 {
-            self.draw_circle_sdf(cx as f32, cy as f32, radius as f32, 1.0, color);
-        } else {
-            self.draw_circle_aliased(cx, cy, radius, color);
-        }
-    }
-
-    /// Draws a filled ellipse
+    /// Draws a filled ellipse with alpha blending and optional background blur.
+    /// For circles, pass `rx == ry`. Pass `blur: 0` for no blur.
     pub fn draw_ellipse_f(
         &mut self,
         cx: isize,
@@ -292,15 +305,39 @@ impl Window {
         rx: usize,
         ry: usize,
         color: &crate::color::Color,
+        blur: usize,
     ) {
-        if self.aa > 0.0 {
-            self.draw_ellipse_f_sdf(cx as f32, cy as f32, rx as f32, ry as f32, color);
+        if blur > 0 {
+            let bx = (cx - rx as isize).max(0) as usize;
+            let by = (cy - ry as isize).max(0) as usize;
+            let bw = (rx * 2).min(self.width.saturating_sub(bx));
+            let bh = (ry * 2).min(self.height.saturating_sub(by));
+            self.blur_region(bx, by, bw, bh, blur);
+        }
+        if color.a == 0 {
+            return;
+        }
+        let base_alpha = color.a as f32 / 255.0;
+        if rx == ry {
+            if self.aa > 0.0 {
+                self.draw_circle_f_sdf(cx as f32, cy as f32, rx as f32, color, base_alpha);
+            } else if color.a == 255 {
+                self.draw_circle_f_aliased(cx, cy, rx, color);
+            } else {
+                self.draw_circle_f_sdf(cx as f32, cy as f32, rx as f32, color, base_alpha);
+            }
         } else {
-            self.draw_ellipse_f_aliased(cx, cy, rx, ry, color);
+            if self.aa > 0.0 {
+                self.draw_ellipse_f_sdf(cx as f32, cy as f32, rx as f32, ry as f32, color, base_alpha);
+            } else if color.a == 255 {
+                self.draw_ellipse_f_aliased(cx, cy, rx, ry, color);
+            } else {
+                self.draw_ellipse_f_sdf(cx as f32, cy as f32, rx as f32, ry as f32, color, base_alpha);
+            }
         }
     }
 
-    /// Draws a hollow ellipse
+    /// Draws a hollow ellipse. For circles, pass `rx == ry`.
     pub fn draw_ellipse(
         &mut self,
         cx: isize,
@@ -309,235 +346,161 @@ impl Window {
         ry: usize,
         color: &crate::color::Color,
     ) {
-        if self.aa > 0.0 {
-            self.draw_ellipse_sdf(cx as f32, cy as f32, rx as f32, ry as f32, 1.0, color);
+        if rx == ry {
+            if self.aa > 0.0 {
+                self.draw_circle_sdf(cx as f32, cy as f32, rx as f32, 1.0, color);
+            } else {
+                self.draw_circle_aliased(cx, cy, rx, color);
+            }
         } else {
-            self.draw_ellipse_aliased(cx, cy, rx, ry, color);
+            if self.aa > 0.0 {
+                self.draw_ellipse_sdf(cx as f32, cy as f32, rx as f32, ry as f32, 1.0, color);
+            } else {
+                self.draw_ellipse_aliased(cx, cy, rx, ry, color);
+            }
         }
     }
 
     // ─── Gradients ──────────────────────────────────────────────────────
 
     /// Draws a filled rectangle with a horizontal linear gradient (left to right)
+    /// Draws a filled rectangle with a horizontal linear gradient (left to right).
+    /// Pass `radius: 0` for sharp corners.
     pub fn draw_gradient_h(
         &mut self,
         x: usize,
         y: usize,
         w: usize,
         h: usize,
+        radius: usize,
         color_left: &crate::color::Color,
         color_right: &crate::color::Color,
     ) {
         if w == 0 || h == 0 {
             return;
         }
-        for dy in 0..h {
-            let row = (y + dy) * self.width;
-            for dx in 0..w {
-                let t = dx as f32 / (w - 1).max(1) as f32;
-                let r = (color_left.r as f32 * (1.0 - t) + color_right.r as f32 * t) as u32;
-                let g = (color_left.g as f32 * (1.0 - t) + color_right.g as f32 * t) as u32;
-                let b = (color_left.b as f32 * (1.0 - t) + color_right.b as f32 * t) as u32;
-                self.framebuffer_raw[row + x + dx] = (r << 16) | (g << 8) | b;
-            }
-        }
-    }
+        if radius > 0 {
+            let aa = self.aa;
+            let fx = x as f32;
+            let fy = y as f32;
+            let fw = w as f32;
+            let fh = h as f32;
+            let r = (radius as f32).min(fw / 2.0).min(fh / 2.0);
 
-    /// Draws a filled rectangle with a vertical linear gradient (top to bottom)
-    pub fn draw_gradient_v(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        color_top: &crate::color::Color,
-        color_bottom: &crate::color::Color,
-    ) {
-        if w == 0 || h == 0 {
-            return;
-        }
-        for dy in 0..h {
-            let t = dy as f32 / (h - 1).max(1) as f32;
-            let r = (color_top.r as f32 * (1.0 - t) + color_bottom.r as f32 * t) as u32;
-            let g = (color_top.g as f32 * (1.0 - t) + color_bottom.g as f32 * t) as u32;
-            let b = (color_top.b as f32 * (1.0 - t) + color_bottom.b as f32 * t) as u32;
-            let value = (r << 16) | (g << 8) | b;
-            let row = (y + dy) * self.width + x;
-            self.framebuffer_raw[row..row + w].fill(value);
-        }
-    }
-
-    /// Draws a filled rounded rectangle with a vertical linear gradient
-    pub fn draw_rounded_gradient_v(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        radius: usize,
-        color_top: &crate::color::Color,
-        color_bottom: &crate::color::Color,
-    ) {
-        if w == 0 || h == 0 {
-            return;
-        }
-        let aa = self.aa;
-        let fx = x as f32;
-        let fy = y as f32;
-        let fw = w as f32;
-        let fh = h as f32;
-        let r = (radius as f32).min(fw / 2.0).min(fh / 2.0);
-
-        if aa > 0.0 {
             let min_px = ((fx - 1.0).floor() as isize).max(0);
             let max_px = ((fx + fw + 1.0).ceil() as isize).min(self.width as isize - 1);
             let min_py = ((fy - 1.0).floor() as isize).max(0);
             let max_py = ((fy + fh + 1.0).ceil() as isize).min(self.height as isize - 1);
 
             for py in min_py..=max_py {
-                let t = (py as f32 - fy) / (fh - 1.0).max(1.0);
-                let t = t.clamp(0.0, 1.0);
-                let row_color = color_top.lerp(color_bottom, t);
                 for px in min_px..=max_px {
                     let pfx = px as f32 + 0.5;
                     let pfy = py as f32 + 0.5;
-                    let dist = rounded_rect_sdf(pfx, pfy, fx, fy, fw, fh, r);
-                    let coverage = (aa * 0.5 - dist).clamp(0.0, 1.0) / aa;
-                    if coverage > 0.0 {
-                        self.blend_pixel(px, py, &row_color, coverage);
+                    let t = ((pfx - fx) / (fw - 1.0).max(1.0)).clamp(0.0, 1.0);
+                    let col = color_left.lerp(color_right, t);
+                    if aa > 0.0 {
+                        let dist = rounded_rect_sdf(pfx, pfy, fx, fy, fw, fh, r);
+                        let coverage = (aa * 0.5 - dist).clamp(0.0, 1.0) / aa;
+                        if coverage > 0.0 {
+                            self.blend_pixel(px, py, &col, coverage);
+                        }
+                    } else {
+                        self.blend_pixel(px, py, &col, 1.0);
                     }
                 }
             }
         } else {
-            let ri = radius.min(w / 2).min(h / 2);
             for dy in 0..h {
-                let t = dy as f32 / (h - 1).max(1) as f32;
-                let cr = (color_top.r as f32 * (1.0 - t) + color_bottom.r as f32 * t) as u32;
-                let cg = (color_top.g as f32 * (1.0 - t) + color_bottom.g as f32 * t) as u32;
-                let cb = (color_top.b as f32 * (1.0 - t) + color_bottom.b as f32 * t) as u32;
-                let value = (cr << 16) | (cg << 8) | cb;
-
-                let (row_start, row_end) = if dy < ri {
-                    let cy = ri - dy;
-                    let dx = ri - isqrt(ri * ri - cy * cy);
-                    (x + dx, x + w - dx)
-                } else if dy >= h - ri {
-                    let cy = dy - (h - 1 - ri);
-                    let dx = ri - isqrt(ri * ri - cy * cy);
-                    (x + dx, x + w - dx)
-                } else {
-                    (x, x + w)
-                };
-
-                let start = (y + dy) * self.width + row_start;
-                let len = row_end - row_start;
-                self.framebuffer_raw[start..start + len].fill(value);
+                let row = (y + dy) * self.width;
+                for dx in 0..w {
+                    let t = dx as f32 / (w - 1).max(1) as f32;
+                    let r = (color_left.r as f32 * (1.0 - t) + color_right.r as f32 * t) as u32;
+                    let g = (color_left.g as f32 * (1.0 - t) + color_right.g as f32 * t) as u32;
+                    let b = (color_left.b as f32 * (1.0 - t) + color_right.b as f32 * t) as u32;
+                    self.framebuffer_raw[row + x + dx] = (r << 16) | (g << 8) | b;
+                }
             }
         }
     }
 
-    // ─── Alpha Blending ─────────────────────────────────────────────────
-
-    /// Draws a single pixel with alpha blending
-    pub fn draw_pixel_alpha(&mut self, x: usize, y: usize, color: &crate::color::Color) {
-        if x >= self.width || y >= self.height {
-            return;
-        }
-        let alpha = color.a as u32;
-        if alpha == 0 {
-            return;
-        }
-        let idx = y * self.width + x;
-        if alpha == 255 {
-            self.framebuffer_raw[idx] = color.as_u32();
-            return;
-        }
-        let bg = self.framebuffer_raw[idx];
-        let bg_r = (bg >> 16) & 0xFF;
-        let bg_g = (bg >> 8) & 0xFF;
-        let bg_b = bg & 0xFF;
-        let inv = 255 - alpha;
-        let r = (color.r as u32 * alpha + bg_r * inv) / 255;
-        let g = (color.g as u32 * alpha + bg_g * inv) / 255;
-        let b = (color.b as u32 * alpha + bg_b * inv) / 255;
-        self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
-    }
-
-    /// Draws a filled rectangle with alpha blending
-    pub fn draw_rect_f_alpha(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        color: &crate::color::Color,
-    ) {
-        let alpha = color.a as u32;
-        if alpha == 0 {
-            return;
-        }
-        if alpha == 255 {
-            self.draw_rect_f(x, y, w, h, color);
-            return;
-        }
-        let fg_r = color.r as u32;
-        let fg_g = color.g as u32;
-        let fg_b = color.b as u32;
-        let inv = 255 - alpha;
-
-        for dy in 0..h {
-            let row = (y + dy) * self.width + x;
-            for dx in 0..w {
-                let idx = row + dx;
-                let bg = self.framebuffer_raw[idx];
-                let bg_r = (bg >> 16) & 0xFF;
-                let bg_g = (bg >> 8) & 0xFF;
-                let bg_b = bg & 0xFF;
-                let r = (fg_r * alpha + bg_r * inv) / 255;
-                let g = (fg_g * alpha + bg_g * inv) / 255;
-                let b = (fg_b * alpha + bg_b * inv) / 255;
-                self.framebuffer_raw[idx] = (r << 16) | (g << 8) | b;
-            }
-        }
-    }
-
-    /// Draws a filled rounded rectangle with alpha blending
-    pub fn draw_rounded_rect_f_alpha(
+    /// Draws a filled rectangle with a vertical linear gradient (top to bottom).
+    /// Pass `radius: 0` for sharp corners.
+    pub fn draw_gradient_v(
         &mut self,
         x: usize,
         y: usize,
         w: usize,
         h: usize,
         radius: usize,
-        color: &crate::color::Color,
+        color_top: &crate::color::Color,
+        color_bottom: &crate::color::Color,
     ) {
-        let aa = self.aa;
-        let fx = x as f32;
-        let fy = y as f32;
-        let fw = w as f32;
-        let fh = h as f32;
-        let r = (radius as f32).min(fw / 2.0).min(fh / 2.0);
-        let base_alpha = color.a as f32 / 255.0;
+        if w == 0 || h == 0 {
+            return;
+        }
+        if radius > 0 {
+            let aa = self.aa;
+            let fx = x as f32;
+            let fy = y as f32;
+            let fw = w as f32;
+            let fh = h as f32;
+            let r = (radius as f32).min(fw / 2.0).min(fh / 2.0);
 
-        let min_px = ((fx - 1.0).floor() as isize).max(0);
-        let max_px = ((fx + fw + 1.0).ceil() as isize).min(self.width as isize - 1);
-        let min_py = ((fy - 1.0).floor() as isize).max(0);
-        let max_py = ((fy + fh + 1.0).ceil() as isize).min(self.height as isize - 1);
+            if aa > 0.0 {
+                let min_px = ((fx - 1.0).floor() as isize).max(0);
+                let max_px = ((fx + fw + 1.0).ceil() as isize).min(self.width as isize - 1);
+                let min_py = ((fy - 1.0).floor() as isize).max(0);
+                let max_py = ((fy + fh + 1.0).ceil() as isize).min(self.height as isize - 1);
 
-        for py in min_py..=max_py {
-            for px in min_px..=max_px {
-                let pfx = px as f32 + 0.5;
-                let pfy = py as f32 + 0.5;
-                let dist = rounded_rect_sdf(pfx, pfy, fx, fy, fw, fh, r);
-                let shape_coverage = if aa > 0.0 {
-                    (aa * 0.5 - dist).clamp(0.0, 1.0) / aa
-                } else {
-                    if dist <= 0.0 { 1.0 } else { 0.0 }
-                };
-                let final_alpha = shape_coverage * base_alpha;
-                if final_alpha > 0.0 {
-                    self.blend_pixel(px, py, color, final_alpha);
+                for py in min_py..=max_py {
+                    let t = (py as f32 - fy) / (fh - 1.0).max(1.0);
+                    let t = t.clamp(0.0, 1.0);
+                    let row_color = color_top.lerp(color_bottom, t);
+                    for px in min_px..=max_px {
+                        let pfx = px as f32 + 0.5;
+                        let pfy = py as f32 + 0.5;
+                        let dist = rounded_rect_sdf(pfx, pfy, fx, fy, fw, fh, r);
+                        let coverage = (aa * 0.5 - dist).clamp(0.0, 1.0) / aa;
+                        if coverage > 0.0 {
+                            self.blend_pixel(px, py, &row_color, coverage);
+                        }
+                    }
                 }
+            } else {
+                let ri = radius.min(w / 2).min(h / 2);
+                for dy in 0..h {
+                    let t = dy as f32 / (h - 1).max(1) as f32;
+                    let cr = (color_top.r as f32 * (1.0 - t) + color_bottom.r as f32 * t) as u32;
+                    let cg = (color_top.g as f32 * (1.0 - t) + color_bottom.g as f32 * t) as u32;
+                    let cb = (color_top.b as f32 * (1.0 - t) + color_bottom.b as f32 * t) as u32;
+                    let value = (cr << 16) | (cg << 8) | cb;
+
+                    let (row_start, row_end) = if dy < ri {
+                        let cy = ri - dy;
+                        let dx = ri - isqrt(ri * ri - cy * cy);
+                        (x + dx, x + w - dx)
+                    } else if dy >= h - ri {
+                        let cy = dy - (h - 1 - ri);
+                        let dx = ri - isqrt(ri * ri - cy * cy);
+                        (x + dx, x + w - dx)
+                    } else {
+                        (x, x + w)
+                    };
+
+                    let start = (y + dy) * self.width + row_start;
+                    let len = row_end - row_start;
+                    self.framebuffer_raw[start..start + len].fill(value);
+                }
+            }
+        } else {
+            for dy in 0..h {
+                let t = dy as f32 / (h - 1).max(1) as f32;
+                let r = (color_top.r as f32 * (1.0 - t) + color_bottom.r as f32 * t) as u32;
+                let g = (color_top.g as f32 * (1.0 - t) + color_bottom.g as f32 * t) as u32;
+                let b = (color_top.b as f32 * (1.0 - t) + color_bottom.b as f32 * t) as u32;
+                let value = (r << 16) | (g << 8) | b;
+                let row = (y + dy) * self.width + x;
+                self.framebuffer_raw[row..row + w].fill(value);
             }
         }
     }
@@ -545,12 +508,15 @@ impl Window {
     // ─── Box Shadow ─────────────────────────────────────────────────────
 
     /// Draws a rectangular drop shadow.
+    /// Draws a drop shadow with optional rounded corners using SDF distance falloff.
+    /// Pass `radius: 0` for sharp corners.
     pub fn draw_box_shadow(
         &mut self,
         x: isize,
         y: isize,
         w: usize,
         h: usize,
+        radius: usize,
         offset_x: isize,
         offset_y: isize,
         spread: isize,
@@ -559,43 +525,38 @@ impl Window {
     ) {
         let sx = x + offset_x - spread;
         let sy = y + offset_y - spread;
-        let sw = (w as isize + spread * 2) as usize;
-        let sh = (h as isize + spread * 2) as usize;
+        let sw = (w as isize + spread * 2).max(0) as f32;
+        let sh = (h as isize + spread * 2).max(0) as f32;
+        let sr = (radius as f32 + spread as f32).max(0.0);
         let blur_f = blur as f32;
 
-        let total_w = sw + blur * 2;
-        let total_h = sh + blur * 2;
-        let draw_x = sx - blur as isize;
-        let draw_y = sy - blur as isize;
+        let fx = sx as f32;
+        let fy = sy as f32;
+        let draw_x = (fx - blur_f).floor() as isize;
+        let draw_y = (fy - blur_f).floor() as isize;
+        let draw_max_x = (fx + sw + blur_f).ceil() as isize;
+        let draw_max_y = (fy + sh + blur_f).ceil() as isize;
 
-        for dy in 0..total_h {
-            let py = draw_y + dy as isize;
+        for py in draw_y..draw_max_y {
             if py < 0 || py >= self.height as isize {
                 continue;
             }
-            for dx in 0..total_w {
-                let px = draw_x + dx as isize;
+            for px in draw_x..draw_max_x {
                 if px < 0 || px >= self.width as isize {
                     continue;
                 }
 
-                let dist_x = if dx < blur {
-                    (blur - dx) as f32
-                } else if dx >= blur + sw {
-                    (dx - blur - sw + 1) as f32
-                } else {
-                    0.0
-                };
-                let dist_y = if dy < blur {
-                    (blur - dy) as f32
-                } else if dy >= blur + sh {
-                    (dy - blur - sh + 1) as f32
-                } else {
-                    0.0
-                };
+                let pfx = px as f32 + 0.5;
+                let pfy = py as f32 + 0.5;
+                let dist = rounded_rect_sdf(pfx, pfy, fx, fy, sw, sh, sr);
 
-                let dist = (dist_x * dist_x + dist_y * dist_y).sqrt();
-                if dist >= blur_f {
+                if dist >= blur_f || dist < 0.0 {
+                    if dist < 0.0 {
+                        let alpha = color.a as f32 / 255.0;
+                        if alpha > 0.0 {
+                            self.blend_pixel(px, py, color, alpha);
+                        }
+                    }
                     continue;
                 }
 
@@ -885,11 +846,118 @@ impl Window {
         }
     }
 
+    // ─── Clipping ────────────────────────────────────────────────────────
+
+    /// Pushes a clipping rectangle. Drawing outside this region is discarded.
+    /// Nested clips are intersected.
+    pub fn push_clip(&mut self, x: usize, y: usize, w: usize, h: usize) {
+        let (cx, cy, cw, ch) = if let Some(&(px, py, pw, ph)) = self.clip_stack.last() {
+            let x0 = x.max(px);
+            let y0 = y.max(py);
+            let x1 = (x + w).min(px + pw);
+            let y1 = (y + h).min(py + ph);
+            if x1 > x0 && y1 > y0 {
+                (x0, y0, x1 - x0, y1 - y0)
+            } else {
+                (x, y, 0, 0)
+            }
+        } else {
+            (x, y, w, h)
+        };
+        self.clip_stack.push((cx, cy, cw, ch));
+    }
+
+    /// Pops the most recent clipping rectangle
+    pub fn pop_clip(&mut self) {
+        self.clip_stack.pop();
+    }
+
+    /// Returns the current clip bounds, or None if no clip is active
+    pub fn current_clip(&self) -> Option<(usize, usize, usize, usize)> {
+        self.clip_stack.last().copied()
+    }
+
+    /// Tests whether a pixel is inside the current clip region
+    #[inline]
+    fn clip_test(&self, x: usize, y: usize) -> bool {
+        if let Some(&(cx, cy, cw, ch)) = self.clip_stack.last() {
+            x >= cx && x < cx + cw && y >= cy && y < cy + ch
+        } else {
+            true
+        }
+    }
+
+    // ─── Text Wrapping ──────────────────────────────────────────────────
+
+    /// Draws text with word wrapping within `max_width` pixels.
+    /// Returns the total height used.
+    pub fn draw_text_wrapped(
+        &mut self,
+        x: usize,
+        y: usize,
+        text: &crate::ui::text::Text,
+        size: f32,
+        color: &crate::color::Color,
+        max_width: usize,
+    ) -> usize {
+        use fontdue::layout::{Layout, LayoutSettings, CoordinateSystem, TextStyle};
+
+        let lm = text.font.font.horizontal_line_metrics(size).unwrap();
+        let line_height = (lm.ascent - lm.descent + lm.line_gap).ceil() as usize;
+
+        let words: Vec<&str> = text.text.split_whitespace().collect();
+        if words.is_empty() {
+            return 0;
+        }
+
+        let fonts = text.font.as_slice();
+        let mut lines: Vec<String> = Vec::new();
+        let mut current_line = String::new();
+
+        for word in &words {
+            let test = if current_line.is_empty() {
+                word.to_string()
+            } else {
+                format!("{} {}", current_line, word)
+            };
+
+            // Measure the test line
+            let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+            layout.reset(&LayoutSettings::default());
+            layout.append(&fonts, &TextStyle::new(&test, size, 0));
+            let test_width = layout.glyphs().last().map_or(0.0, |g| {
+                g.x + text.font.font.metrics(g.parent, size).advance_width
+            });
+
+            if test_width <= max_width as f32 || current_line.is_empty() {
+                current_line = test;
+            } else {
+                lines.push(current_line);
+                current_line = word.to_string();
+            }
+        }
+        if !current_line.is_empty() {
+            lines.push(current_line);
+        }
+
+        let total_height = lines.len() * line_height;
+        for (i, line) in lines.iter().enumerate() {
+            let line_text = crate::ui::text::Text::new(line, text.font.clone());
+            self.draw_text(x, y + i * line_height, &line_text, size, color);
+        }
+
+        total_height
+    }
+
+
     // ─── Private: AA Implementations ────────────────────────────────────
 
     #[inline]
     fn blend_pixel(&mut self, x: isize, y: isize, color: &crate::color::Color, alpha: f32) {
         if x < 0 || y < 0 || x >= self.width as isize || y >= self.height as isize {
+            return;
+        }
+        if !self.clip_test(x as usize, y as usize) {
             return;
         }
         let a = (alpha * 255.0) as u32;
@@ -1060,7 +1128,7 @@ impl Window {
     }
 
     /// Filled circle with SDF AA
-    fn draw_circle_f_sdf(&mut self, cx: f32, cy: f32, radius: f32, color: &crate::color::Color) {
+    fn draw_circle_f_sdf(&mut self, cx: f32, cy: f32, radius: f32, color: &crate::color::Color, base_alpha: f32) {
         let aa = self.aa;
         let min_x = ((cx - radius - aa).floor() as isize).max(0);
         let max_x = ((cx + radius + aa).ceil() as isize).min(self.width as isize - 1);
@@ -1073,8 +1141,9 @@ impl Window {
                 let fy = py as f32 + 0.5;
                 let dist = ((fx - cx).powi(2) + (fy - cy).powi(2)).sqrt() - radius;
                 let coverage = ((aa * 0.5 - dist) / aa).clamp(0.0, 1.0);
-                if coverage > 0.0 {
-                    self.blend_pixel(px, py, color, coverage);
+                let final_alpha = coverage * base_alpha;
+                if final_alpha > 0.0 {
+                    self.blend_pixel(px, py, color, final_alpha);
                 }
             }
         }
@@ -1147,7 +1216,7 @@ impl Window {
     }
 
     /// Filled ellipse with SDF AA
-    fn draw_ellipse_f_sdf(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, color: &crate::color::Color) {
+    fn draw_ellipse_f_sdf(&mut self, cx: f32, cy: f32, rx: f32, ry: f32, color: &crate::color::Color, base_alpha: f32) {
         let aa = self.aa;
         let min_x = ((cx - rx - aa).floor() as isize).max(0);
         let max_x = ((cx + rx + aa).ceil() as isize).min(self.width as isize - 1);
@@ -1164,8 +1233,9 @@ impl Window {
                 let r_min = rx.min(ry);
                 let dist = (d - 1.0) * r_min;
                 let coverage = ((aa * 0.5 - dist) / aa).clamp(0.0, 1.0);
-                if coverage > 0.0 {
-                    self.blend_pixel(px, py, color, coverage);
+                let final_alpha = coverage * base_alpha;
+                if final_alpha > 0.0 {
+                    self.blend_pixel(px, py, color, final_alpha);
                 }
             }
         }
@@ -1230,8 +1300,8 @@ impl Window {
         }
     }
 
-    /// Filled rounded rect with SDF AA
-    fn draw_rounded_rect_f_sdf(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: &crate::color::Color) {
+    /// Filled rounded rect with SDF AA, respecting base_alpha
+    fn draw_rounded_rect_f_sdf(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, color: &crate::color::Color, base_alpha: f32) {
         let r = radius.min(w / 2.0).min(h / 2.0);
         let aa = self.aa;
         let min_px = ((x - aa).floor() as isize).max(0);
@@ -1247,10 +1317,11 @@ impl Window {
                 let pfy = py as f32 + 0.5;
                 let dist = rounded_rect_sdf(pfx, pfy, x, y, w, h, r);
                 let coverage = ((aa * 0.5 - dist) / aa).clamp(0.0, 1.0);
-                if coverage >= 1.0 {
+                let final_alpha = coverage * base_alpha;
+                if final_alpha >= 1.0 {
                     self.framebuffer_raw[py as usize * self.width + px as usize] = value;
-                } else if coverage > 0.0 {
-                    self.blend_pixel(px, py, color, coverage);
+                } else if final_alpha > 0.0 {
+                    self.blend_pixel(px, py, color, final_alpha);
                 }
             }
         }

@@ -297,17 +297,18 @@ impl Button {
             },
         }
 
-        window.draw_rounded_rect_f(
+        window.draw_rect_f(
             self.pos_x,
             self.pos_y,
             self.width,
             self.height,
             self.radius,
             bg_col,
+            0,
         );
 
         for i in 0..border_size {
-            window.draw_rounded_rect(
+            window.draw_rect(
                 self.pos_x + i,
                 self.pos_y + i,
                 self.width - i * 2,

@@ -178,8 +178,8 @@ impl Slider {
         let inner_radius = self.radius.saturating_sub(self.border_size);
 
         // Track background
-        window.draw_rounded_rect_f(self.pos_x, self.pos_y, self.width, self.height, self.radius, &self.border_color);
-        window.draw_rounded_rect_f(inner_x, inner_y, inner_w, inner_h, inner_radius, &self.track_color);
+        window.draw_rect_f(self.pos_x, self.pos_y, self.width, self.height, self.radius, &self.border_color, 0);
+        window.draw_rect_f(inner_x, inner_y, inner_w, inner_h, inner_radius, &self.track_color, 0);
 
         // Handle position
         let usable_w = inner_w.saturating_sub(self.handle_width);
@@ -188,7 +188,7 @@ impl Slider {
         // Filled portion of track
         let filled_w = (handle_x + self.handle_width / 2).saturating_sub(inner_x);
         if filled_w > 0 {
-            window.draw_rounded_rect_f(inner_x, inner_y, filled_w, inner_h, inner_radius, &self.track_filled_color);
+            window.draw_rect_f(inner_x, inner_y, filled_w, inner_h, inner_radius, &self.track_filled_color, 0);
         }
 
         let handle_col = if self.dragging {
@@ -199,10 +199,10 @@ impl Slider {
 
         if self.handle_overlay {
             // Handle on top of everything at full outer height
-            window.draw_rounded_rect_f(handle_x, self.pos_y, self.handle_width, self.height, self.handle_radius, handle_col);
+            window.draw_rect_f(handle_x, self.pos_y, self.handle_width, self.height, self.handle_radius, handle_col, 0);
         } else {
             // Handle within inner area, then solid border ring on top
-            window.draw_rounded_rect_f(handle_x, inner_y, self.handle_width, inner_h, self.handle_radius, handle_col);
+            window.draw_rect_f(handle_x, inner_y, self.handle_width, inner_h, self.handle_radius, handle_col, 0);
             self.draw_border_ring(window);
         }
     }

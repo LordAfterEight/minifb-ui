@@ -61,10 +61,20 @@ pub mod window;
 pub mod color;
 /// Provides UI elements you can draw in a Window
 pub mod ui;
+/// Provides a Theme struct with dark/light presets
+pub mod theme;
+/// Provides animation/tween utilities
+pub mod anim;
+/// Provides layout helpers (VStack, HStack)
+pub mod layout;
 
 pub use minifb::{Key, KeyRepeat};
 
 pub use color::Color;
 pub use ttf::Font;
 pub use window::Window;
-pub use ui::{Text, Button, ButtonType, Alignment, Slider, TextInput, Switch};
+pub use theme::Theme;
+pub use anim::{Tween, Easing};
+pub use layout::{VStack, HStack};
+pub use ui::{Text, Button, ButtonType, Alignment, Slider, TextInput, Switch,
+    Checkbox, ProgressBar, Dropdown, Tooltip, ScrollArea, Tabs, ContextMenu};

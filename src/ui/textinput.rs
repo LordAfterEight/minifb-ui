@@ -319,11 +319,11 @@ impl TextInput {
         };
 
         // Background
-        window.draw_rounded_rect_f(self.pos_x, self.pos_y, self.width, self.height, self.radius, bg_col);
+        window.draw_rect_f(self.pos_x, self.pos_y, self.width, self.height, self.radius, bg_col, 0);
 
         // Border
         for i in 0..border_size {
-            window.draw_rounded_rect(
+            window.draw_rect(
                 self.pos_x + i,
                 self.pos_y + i,
                 self.width - i * 2,
@@ -376,7 +376,7 @@ impl TextInput {
                 if cx >= text_area_x && cx < text_area_x + text_area_w {
                     let cursor_y = self.pos_y + border_size + 2;
                     let cursor_h = self.height.saturating_sub(border_size * 2 + 4);
-                    window.draw_rect_f(cx, cursor_y, self.cursor_width, cursor_h, &self.cursor_col);
+                    window.draw_rect_f(cx, cursor_y, self.cursor_width, cursor_h, 0, &self.cursor_col, 0);
                 }
             }
         }

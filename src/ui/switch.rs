@@ -159,11 +159,12 @@ impl Switch {
         let radius = self.height / 2;
 
         // Draw track
-        window.draw_rounded_rect_f(
+        window.draw_rect_f(
             self.pos_x, self.pos_y,
             self.width, self.height,
             radius,
             &track_color,
+            0,
         );
 
         // Compute thumb position
@@ -174,19 +175,21 @@ impl Switch {
         let thumb_cy = self.pos_y as f32 + self.height as f32 / 2.0;
 
         // Thumb shadow (subtle offset down)
-        window.draw_circle_f(
+        window.draw_ellipse_f(
             thumb_cx as isize,
             (thumb_cy + 1.0) as isize,
-            thumb_radius as usize,
+            thumb_radius as usize, thumb_radius as usize,
             &crate::color::Color::rgba(0, 0, 0, 30),
+            0,
         );
 
         // Thumb
-        window.draw_circle_f(
+        window.draw_ellipse_f(
             thumb_cx as isize,
             thumb_cy as isize,
-            thumb_radius as usize,
+            thumb_radius as usize, thumb_radius as usize,
             &self.thumb_color,
+            0,
         );
 
         // Label
